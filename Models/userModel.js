@@ -7,22 +7,17 @@ const UserSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        unique: false,  
+        unique: true,
+        required: false 
     },
     password: {
         type: String,
         required: true
     },
     phone: {
-        type: Number, 
+        type: String,
         required: true,
-        unique: true, 
-        validate: {
-            validator: function(v) {
-                return /^\d{11}$/.test(v); 
-            },
-            message: props => `${props.value} is not a valid phone number!`
-        }
+        unique: true 
     },
     image: {
         type: String,
