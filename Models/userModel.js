@@ -8,7 +8,8 @@ const UserSchema = new mongoose.Schema({
     email: {
         type: String,
         unique: true,
-        required: false 
+        required: false,
+        lowercase: true
     },
     password: {
         type: String,
@@ -17,11 +18,27 @@ const UserSchema = new mongoose.Schema({
     phone: {
         type: String,
         required: true,
-        unique: true 
+        unique: true,
+        validate: {
+            validator: function(v) {
+                return /^[0-9]{11}$/.test(v);
+            },
+            message: props => `${props.value} is not a valid phone number!`
+        }
     },
     image: {
         type: String,
         required: false
+    },
+    role: {
+        type: String,
+        enum: ['admin', 'driver', 'customer'],
+        default: 'customer',
+        required: true
+    },
+    isApproved: {
+        type: Boolean,
+        default: false
     }
 }, { timestamps: true });
 

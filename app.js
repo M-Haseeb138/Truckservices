@@ -20,9 +20,10 @@ app.use(cors({
 
 
 // Routes 
-app.use('/Authentication', require('./routes/userRoutes'));
-
-
+app.use('/api/auth', require('./routes/userRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/driver', require('./routes/driverRoutes'));
+app.use('/api/customer', require('./routes/customerRoutes'));
 
 
 
