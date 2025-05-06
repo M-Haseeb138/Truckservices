@@ -132,42 +132,64 @@ exports.getUser = async (req, res) => {
 };
 
 exports.updateUser = async (req, res) => {
-  try {
-      const userId = req.user?.userId;
-      if (!userId) {
-          return res.status(401).json({ message: "Unauthorized: User not found" });
-      }
+    try {
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ message: "Unauthorized: User not found" });
+        }
 
-      const { fullName, email, phone } = req.body;
-      const updateData = {};
+        const { fullName, email, phone, role, ...otherFields } = req.body;
+        const updateData = {};
 
-      if (fullName) updateData.fullName = fullName;
-      if (email) updateData.email = email.toLowerCase();
+        if (fullName) updateData.fullName = fullName;
 
-      if (phone) {
-          if (!/^[0-9]{11}$/.test(phone)) {
-              return res.status(400).json({ message: "Phone number must be 11 digits" });
-          }
-          const existingPhone = await User.findOne({ phone });
-          if (existingPhone && existingPhone._id.toString() !== userId) {
-              return res.status(400).json({ message: "Phone number already in use" });
-          }
-          updateData.phone = phone;
-      }
+        // Only validate and update email if user is providing it
+        if (email) {
+            const user = await User.findById(userId);
+            if (user.email !== email.toLowerCase()) {  // Only if new email is different
+                const existingEmail = await User.findOne({ email: email.toLowerCase() });
+                if (existingEmail && existingEmail._id.toString() !== userId) {
+                    return res.status(400).json({ message: "Email already in use" });
+                }
+                updateData.email = email.toLowerCase();
+            }
+        }
 
-      if (req.file) {
-          updateData.image = req.file.path || req.file.secure_url || req.file.url;
-      }
+        // Only validate and update phone if user is providing it
+        if (phone) {
+            const user = await User.findById(userId);
+            if (user.phone !== phone) {  // Only if new phone is different
+                if (!/^[0-9]{11}$/.test(phone)) {
+                    return res.status(400).json({ message: "Phone number must be 11 digits" });
+                }
+                const existingPhone = await User.findOne({ phone });
+                if (existingPhone && existingPhone._id.toString() !== userId) {
+                    return res.status(400).json({ message: "Phone number already in use" });
+                }
+                updateData.phone = phone;
+            }
+        }
 
-      const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
-          new: true,
-          runValidators: true,
-      }).select("-password");
+        if (req.file) {
+            updateData.image = req.file.path || req.file.secure_url || req.file.url;
+        }
 
-      res.status(200).json({ message: "User updated successfully", user: updatedUser });
-  } catch (error) {
-      res.status(500).json({ message: "Error updating user", error: error.message });
-  }
+        // Block role update
+        if (role) {
+            console.log("Role update attempt blocked. Ignoring role update.");
+        }
+
+        Object.assign(updateData, otherFields);
+
+        const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+            new: true,
+            runValidators: true,
+        }).select("-password");
+
+        res.status(200).json({ message: "User updated successfully", user: updatedUser });
+    } catch (error) {
+        res.status(500).json({ message: "Error updating user", error: error.message });
+    }
 };
 
 exports.deleteUser = async (req, res) => {

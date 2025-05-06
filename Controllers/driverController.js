@@ -17,31 +17,36 @@ exports.registerTruck = async (req, res) => {
             driverAddress,
             driverCountry,
             driverCity,
-            driverArea,
+            lisenceNo,
             typeOfTruck,
             weight,
-            lisenceNo,
-            truckColor
+            Registercity,
+            VehicleNo
         } = req.body;
 
-        // Check if user is approved driver
+        // Check if user is an approved driver
         if (!req.user.isApproved) {
             return res.status(403).json({ 
+                success: false,
                 message: "Your driver account is not yet approved by admin" 
             });
         }
 
-        // Check if files are uploaded
+        // Check if all required images/files are uploaded
         const idCardFrontImage = req.files?.idCardFrontImage?.[0]?.path;
         const idCardBackImage = req.files?.idCardBackImage?.[0]?.path;
         const licenseFrontImage = req.files?.licenseFrontImage?.[0]?.path;
         const profilePicture = req.files?.profilePicture?.[0]?.path;
+        const Truckdocument = req.files?.Truckdocument?.[0]?.path;
 
-        if (!idCardFrontImage || !idCardBackImage || !licenseFrontImage || !profilePicture) {
-            return res.status(400).json({ message: "All images are required" });
+        if (!idCardFrontImage || !idCardBackImage || !licenseFrontImage || !profilePicture || !Truckdocument) {
+            return res.status(400).json({ 
+                success: false, 
+                message: "All required images and documents must be uploaded" 
+            });
         }
 
-        // Create new truck
+        // Create a new Truck document
         const newTruck = new Truck({
             ownerDetails: {
                 truckOwnerName,
@@ -59,7 +64,7 @@ exports.registerTruck = async (req, res) => {
                 address: driverAddress,
                 country: driverCountry,
                 city: driverCity,
-                area: driverArea
+                lisenceNo
             },
             idCardFrontImage,
             idCardBackImage,
@@ -68,22 +73,31 @@ exports.registerTruck = async (req, res) => {
             truckDetails: {
                 typeOfTruck,
                 weight,
-                lisenceNo,
-                truckColor
+                Registercity,
+                VehicleNo,
+                Truckdocument
             },
             userId: req.user._id,
             status: 'pending'
         });
 
         await newTruck.save();
+
         res.status(201).json({ 
-            message: "Truck registration submitted for admin approval", 
+            success: true,
+            message: "Truck registration submitted successfully for admin approval", 
             truck: newTruck 
         });
+
     } catch (error) {
-        res.status(500).json({ message: "Server Error", error: error.message });
+        res.status(500).json({ 
+            success: false,
+            message: "Server Error", 
+            error: error.message 
+        });
     }
 };
+
 
 exports.getMyTrucks = async (req, res) => {
     try {

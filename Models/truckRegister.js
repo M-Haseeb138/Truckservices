@@ -17,7 +17,7 @@ const truckSchema = new mongoose.Schema({
         address: { type: String, required: true },
         country: { type: String, required: true },
         city: { type: String, required: true },
-        area: { type: String, required: true }
+        lisenceNo:{type:String,required:true}
     },
     idCardFrontImage: { type: String, required: true },
     idCardBackImage: { type: String, required: true },
@@ -26,8 +26,9 @@ const truckSchema = new mongoose.Schema({
     truckDetails: {
         typeOfTruck: { type: String, required: true },
         weight: { type: String, required: true },
-        lisenceNo: { type: String, required: true },
-        truckColor: { type: String, required: true }
+        Registercity: { type: String, required: true },
+        VehicleNo: { type: String, required: true },
+        Truckdocument:{type:String,require:true}
     },
     userId: { 
         type: mongoose.Schema.Types.ObjectId, 
