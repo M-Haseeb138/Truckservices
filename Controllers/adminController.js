@@ -49,3 +49,53 @@ exports.getAllDrivers = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
+
+exports.getPendingBookings = async (req, res) => {
+    try {
+        const bookings = await TruckBooking.find({ status: 'pending' })
+            .populate('userId')
+            .populate('truckId');
+        res.status(200).json({ success: true, data: bookings });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
+
+exports.approveBooking = async (req, res) => {
+    try {
+        const { bookingId, truckId } = req.params;
+
+        const booking = await TruckBooking.findById(bookingId);
+        if (!booking) {
+            return res.status(404).json({ 
+                success: false,
+                message: "Booking not found" 
+            });
+        }
+
+        // Verify truck is available
+        const truck = await Truck.findById(truckId);
+        if (!truck || truck.status !== 'approved') {
+            return res.status(400).json({ 
+                success: false,
+                message: "Selected truck is not available" 
+            });
+        }
+
+        // Update booking
+        booking.truckId = truckId;
+        booking.status = 'confirmed';
+        booking.approvedBy = req.user._id;
+        booking.approvalDate = new Date();
+        
+        await booking.save();
+
+        res.status(200).json({ 
+            success: true,
+            message: "Booking approved and truck assigned", 
+            booking 
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};

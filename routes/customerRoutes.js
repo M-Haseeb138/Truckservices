@@ -5,7 +5,7 @@ const verifyToken = require("../Middlewares/authMiddleware");
 const {authorizeRoles} = require("../Middlewares/roleMiddleware");
 
 // Truck Booking
-router.post("/bookings", verifyToken, authorizeRoles('customer'), customerController.bookTruck);
+router.post("/TruckBooking", verifyToken, authorizeRoles('customer'), customerController.bookTruck);
 router.get("/bookings/my", verifyToken, authorizeRoles('customer'), customerController.getMyBookings);
 
 module.exports = router;

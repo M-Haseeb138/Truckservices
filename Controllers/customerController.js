@@ -7,10 +7,8 @@ exports.bookTruck = async (req, res) => {
             truckId,
             truckSize,
             loadType,
-            fromCity,
-            fromArea,
-            toCity,
-            toArea,
+            from,
+            to,
             material,
             weightMt,
             truckType,
@@ -18,26 +16,35 @@ exports.bookTruck = async (req, res) => {
             scheduledDate
         } = req.body;
 
-        // Check if truck exists and is approved
+        // Validate if truck exists and is approved
         const truck = await Truck.findOne({ 
-            _id: truckId, 
+            _id: truckId,
             status: 'approved' 
         });
 
         if (!truck) {
             return res.status(404).json({ 
-                message: "Truck not found or not approved" 
+                success: false,
+                message: "This truck is not available for booking (not approved by admin)"
             });
         }
 
-        // Create new booking
+        const bookingDate = new Date(scheduledDate);
+        if (bookingDate < new Date()) {
+            return res.status(400).json({
+                success: false,
+                message: "Scheduled date must be in the future"
+            });
+        }
+
+        // Create booking
         const newBooking = new TruckBooking({
-            userId: req.user._id,
+            userId: req.user.userId,  // Notice: req.user.userId (not _id) based on your token
             truckId,
             truckSize,
             loadType,
-            from: { city: fromCity, area: fromArea },
-            to: { city: toCity, area: toArea },
+            from,
+            to,
             material,
             weightMt,
             truckType,
@@ -47,15 +54,17 @@ exports.bookTruck = async (req, res) => {
         });
 
         await newBooking.save();
+
         res.status(201).json({ 
             success: true, 
             message: "Truck booked successfully", 
             booking: newBooking 
         });
+
     } catch (error) {
         res.status(500).json({ 
             success: false, 
-            message: "Server error", 
+            message: "Server error",
             error: error.message 
         });
     }

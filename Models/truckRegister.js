@@ -46,4 +46,4 @@ const truckSchema = new mongoose.Schema({
     approvalDate: { type: Date }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Truck', truckSchema);
+module.exports = mongoose.model('TruckRegistration ', truckSchema);

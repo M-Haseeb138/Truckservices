@@ -14,7 +14,10 @@ exports.signup = async (req, res) => {
         }
 
         if (!/^[0-9]{11}$/.test(phone)) {
-            return res.status(400).json({ message: "Phone number must be 11 digits" });
+            return res.status(400).json({ 
+                success: false,
+                message: "Phone number must be 11 digits" 
+              });
         }
 
         // Check if phone already exists
@@ -167,7 +170,6 @@ exports.updateUser = async (req, res) => {
   }
 };
 
-
 exports.deleteUser = async (req, res) => {
   try {
       const userId = req.user?.userId;
@@ -191,4 +193,25 @@ exports.deleteUser = async (req, res) => {
   } catch (error) {
       return res.status(500).json({ message: "Error deleting user", error: error.message });
   }
+};
+
+
+exports.logout = async (req, res) => {
+    try {
+        res.cookie("token", "", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "Lax",
+            path: "/",
+            expires: new Date(0)
+        });
+
+        res.status(200).json({ message: "Logout successful!" });
+        console.log("Logged-in User ID:", req.user.userId);
+
+
+    } catch (error) {
+        console.error("Logout error:", error.message);
+        res.status(500).json({ message: "Error logging out", error: error.message });
+    }
 };

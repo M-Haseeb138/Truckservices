@@ -21,19 +21,34 @@ const truckBookingSchema = new mongoose.Schema({
         enum: ["Full", "Part"], 
         required: true 
     },
-    from: {
-        city: { type: String, required: true },
-        area: { type: String, required: true }
+    from: { 
+        type: String, 
+        required: true 
     },
-    to: {
-        city: { type: String, required: true },
-        area: { type: String, required: true }
+    to: { 
+        type: String, 
+        required: true 
     },
-    material: { type: String, required: true },
-    weightMt: { type: Number, required: true },
-    truckType: { type: String, required: true },
-    noOfTrucks: { type: Number, required: true },
-    scheduledDate: { type: Date, required: true },
+    material: { 
+        type: String, 
+        required: true 
+    },
+    weightMt: { 
+        type: Number, 
+        required: true 
+    },
+    truckType: { 
+        type: String, 
+        required: true 
+    },
+    noOfTrucks: { 
+        type: Number, 
+        required: true 
+    },
+    scheduledDate: { 
+        type: Date, 
+        required: true 
+    },
     status: {
         type: String,
         enum: ['pending', 'confirmed', 'completed', 'cancelled'],
