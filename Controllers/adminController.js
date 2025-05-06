@@ -1,5 +1,6 @@
 const Truck = require("../Models/TruckBooking");
 const User = require("../Models/userModel");
+const registerTruck = require("../Models/truckRegister");
 
 exports.approveTruck = async (req, res) => {
     try {
