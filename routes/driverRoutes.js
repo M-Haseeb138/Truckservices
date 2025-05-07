@@ -13,12 +13,15 @@ router.post("/trucks/register",
         { name: 'idCardFrontImage', maxCount: 1 },
         { name: 'idCardBackImage', maxCount: 1 },
         { name: 'licenseFrontImage', maxCount: 1 },
-        { name: 'profilePicture', maxCount: 1 }
+        { name: 'profilePicture', maxCount: 1 },
+        { name: 'Truckdocument', maxCount: 1 }
     ]), 
     driverController.registerTruck
 );
-
-// Get driver's trucks
-router.get("/trucks/my", verifyToken, authorizeRoles('driver'), driverController.getMyTrucks);
-
+router.get("/MyTrucks", verifyToken, authorizeRoles('driver'), driverController.getMyTrucks);
+router.get("/getmyassignments", verifyToken, authorizeRoles('driver'), driverController.getMyAssignments);
+router.put("/assignments/status", verifyToken, authorizeRoles('driver'), driverController.updateAssignmentStatus);
 module.exports = router;
+
+
+

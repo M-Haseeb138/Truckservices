@@ -7,5 +7,10 @@ const {authorizeRoles} = require("../Middlewares/roleMiddleware");
 // Truck Booking
 router.post("/TruckBooking", verifyToken, authorizeRoles('customer'), customerController.bookTruck);
 router.get("/bookings/my", verifyToken, authorizeRoles('customer'), customerController.getMyBookings);
+router.put('/bookings/cancel/:bookingId', 
+    verifyToken, 
+    authorizeRoles('customer'), 
+    customerController.cancelBooking
+  );
 
 module.exports = router;

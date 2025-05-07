@@ -44,6 +44,10 @@ const truckSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId, 
         ref: "User" 
     },
+    isAvailable: {
+        type: Boolean,
+        default: true
+      },
     approvalDate: { type: Date }
 }, { timestamps: true });
 
