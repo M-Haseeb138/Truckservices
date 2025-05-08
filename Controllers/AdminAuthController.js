@@ -4,6 +4,9 @@ const crypto = require("crypto");
 const sendEmail = require("../services/emailService");
 const bcrypt = require("bcrypt");
 
+function generateOTP() {
+    return Math.floor(100000 + Math.random() * 900000).toString();
+}
 exports.signup = async (req, res) => {
     try {
         const { fullName, email, password, phone } = req.body;
@@ -98,13 +101,6 @@ exports.login = async (req, res) => {
         res.status(500).json({ success: false, message: "Login failed", error: err.message });
     }
 };
-
-// Generate 6-digit OTP
-function generateOTP() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-// Forgot Password (send OTP)
 exports.forgotPassword = async (req, res) => {
     const { email } = req.body;
     try {
@@ -119,12 +115,21 @@ exports.forgotPassword = async (req, res) => {
         admin.otpAttempts = 0;
         await admin.save();
 
-        // Send email
         await sendEmail({
             to: admin.email,
-            subject: "Your Password Reset Code",
-            text: `Hello Admin,\n\nYour password reset code is: ${otpCode}\n\nThis code will expire in 10 minutes.\nIf you did not request this, please ignore this email.\n\nThanks.`
-        });
+            subject: "Password Reset Code (TruckServices)",
+            html: `
+              <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+                <h2>Hello Admin,</h2>
+                <p>Your password reset code is:</p>
+                <div style="font-size: 24px; font-weight: bold; margin: 20px 0;">${otpCode}</div>
+                <p>This code will expire in <strong>10 minutes</strong>.</p>
+                <p>If you did not request this, please ignore this email.</p>
+                <br/>
+                <p>Thanks,<br/>TruckServices Team</p>
+              </div>
+            `,
+          });
 
         res.json({ success: true, message: "OTP sent to your email" });
     } catch (error) {
@@ -132,74 +137,159 @@ exports.forgotPassword = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
-
-// Verify OTP
 exports.verifyOtp = async (req, res) => {
-    const { email, otpCode } = req.body;
     try {
-        const admin = await Admin.findOne({ email: email.toLowerCase() });
+        const { email, otpCode } = req.body;
+
+        const admin = await Admin.findOne({ email });
         if (!admin) {
             return res.status(404).json({ success: false, message: "Admin not found" });
         }
 
-        if (admin.otpAttempts >= 5) {
-            return res.status(403).json({ success: false, message: "Too many incorrect attempts. Try again later." });
-        }
-
+        // First check if OTP and expiry exist
         if (!admin.otpCode || !admin.otpExpires) {
-            return res.status(400).json({ success: false, message: "No OTP requested" });
+            return res.status(400).json({ success: false, message: "No OTP generated" });
         }
 
-        if (Date.now() > admin.otpExpires) {
-            return res.status(400).json({ success: false, message: "OTP expired" });
+        // Compare OTPs (convert to string to avoid type mismatch)
+        if (admin.otpCode !== otpCode.toString()) {
+            return res.status(400).json({ success: false, message: "Invalid OTP" });
         }
 
-        if (admin.otpCode !== otpCode) {
-            admin.otpAttempts += 1;
-            await admin.save();
-            return res.status(400).json({ success: false, message: "Incorrect OTP" });
+        // Check if OTP expired
+        if (admin.otpExpires < Date.now()) {
+            return res.status(400).json({ success: false, message: "OTP has expired" });
         }
 
-        res.json({ success: true, message: "OTP verified successfully" });
-    } catch (error) {
-        console.error("Verify OTP Error:", error.message);
-        res.status(500).json({ success: false, message: "Server Error" });
-    }
-};
-
-// Reset Password
-exports.resetPassword = async (req, res) => {
-    const { email, otpCode, newPassword } = req.body;
-    try {
-        const admin = await Admin.findOne({ email: email.toLowerCase() });
-        if (!admin) {
-            return res.status(404).json({ success: false, message: "Admin not found" });
-        }
-
-        if (!admin.otpCode || !admin.otpExpires) {
-            return res.status(400).json({ success: false, message: "No OTP requested" });
-        }
-
-        if (Date.now() > admin.otpExpires) {
-            return res.status(400).json({ success: false, message: "OTP expired" });
-        }
-
-        if (admin.otpCode !== otpCode) {
-            admin.otpAttempts += 1;
-            await admin.save();
-            return res.status(400).json({ success: false, message: "Incorrect OTP" });
-        }
-
-        // Update password
-        admin.password = await bcrypt.hash(newPassword, 10);
-        admin.otpCode = undefined;
+        // ✅ Mark OTP as verified
+        admin.isOtpVerified = true;
+        admin.otpCode = undefined; // clear OTP
         admin.otpExpires = undefined;
-        admin.otpAttempts = 0;
+        admin.otpAttempts = 0; // optional: reset attempts
+
         await admin.save();
 
-        res.json({ success: true, message: "Password reset successful" });
+        res.status(200).json({ success: true, message: "OTP verified successfully" });
     } catch (error) {
-        console.error("Reset Password Error:", error.message);
+        console.error("Verify OTP Error:", error);
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
+exports.resetPassword = async (req, res) => {
+    try {
+        const { email, newPassword } = req.body;
+
+        const admin = await Admin.findOne({ email });
+        if (!admin) {
+            return res.status(404).json({ success: false, message: "Admin not found" });
+        }
+
+        if (!admin.isOtpVerified) {
+            return res.status(400).json({ success: false, message: "OTP not verified. Please verify OTP first." });
+        }
+
+        const isSamePassword = await bcrypt.compare(newPassword, admin.password);
+        if (isSamePassword) {
+            return res.status(400).json({ success: false, message: "New password must be different from old password" });
+        }
+
+        // ⚡ Don't manually hash here
+        admin.password = newPassword;
+
+        admin.isOtpVerified = false;
+
+        await admin.save(); // auto-hash because of pre("save")
+
+        res.status(200).json({ success: true, message: "Password reset successful" });
+    } catch (error) {
+        console.error("Reset Password Error:", error);
+        res.status(500).json({ success: false, message: "Server Error" });
+    }
+};
+exports.getAllAdmins = async (req, res) => {
+    try {
+      const admins = await Admin.find().select("-password"); // Don't send password
+  
+      res.status(200).json({
+        success: true,
+        admins
+      });
+    } catch (error) {
+      console.error("Get All Admins Error:", error);
+      res.status(500).json({ success: false, message: "Server Error" });
+    }
+  };
+  exports.getAdminById = async (req, res) => {
+    try {
+      const { adminId } = req.params;
+  
+      const admin = await Admin.findById(adminId).select("-password"); // hide password
+  
+      if (!admin) {
+        return res.status(404).json({ success: false, message: "Admin not found" });
+      }
+  
+      res.status(200).json({
+        success: true,
+        admin
+      });
+    } catch (error) {
+      console.error("Get Admin By ID Error:", error);
+      res.status(500).json({ success: false, message: "Server Error" });
+    }
+  };
+  exports.deleteAdmin = async (req, res) => {
+    try {
+      const { adminId } = req.params;
+  
+      const admin = await Admin.findById(adminId);
+      if (!admin) {
+        return res.status(404).json({ success: false, message: "Admin not found" });
+      }
+  
+      await Admin.findByIdAndDelete(adminId);
+  
+      res.status(200).json({
+        success: true,
+        message: "Admin deleted successfully"
+      });
+    } catch (error) {
+      console.error("Delete Admin Error:", error);
+      res.status(500).json({ success: false, message: "Server Error" });
+    }
+  };
+  exports.updateAdmin = async (req, res) => {
+    try {
+      const { adminId } = req.params;
+      const { fullName, email, phone } = req.body;
+      const image = req.file?.path || undefined;
+  
+      const admin = await Admin.findById(adminId);
+      if (!admin) {
+        return res.status(404).json({ success: false, message: "Admin not found" });
+      }
+  
+      if (fullName) admin.fullName = fullName;
+      if (email) admin.email = email.toLowerCase();
+      if (phone) admin.phone = phone;
+      if (image) admin.image = image;
+  
+      await admin.save();
+  
+      res.status(200).json({
+        success: true,
+        message: "Admin updated successfully",
+        admin: {
+          id: admin._id,
+          fullName: admin.fullName,
+          email: admin.email,
+          phone: admin.phone,
+          image: admin.image,
+        }
+      });
+    } catch (error) {
+      console.error("Update Admin Error:", error);
+      res.status(500).json({ success: false, message: "Server Error" });
+    }
+  };
+  
