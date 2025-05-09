@@ -292,4 +292,22 @@ exports.getAllAdmins = async (req, res) => {
       res.status(500).json({ success: false, message: "Server Error" });
     }
   };
-  
+   exports.logout = async (req, res) => {
+    try {
+        res.cookie("token", "", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "Lax",
+            path: "/",
+            expires: new Date(0)
+        });
+
+        res.status(200).json({ message: "Logout successful!" });
+        console.log("Logged-in User ID:", req.user.userId);
+
+
+    } catch (error) {
+        console.error("Logout error:", error.message);
+        res.status(500).json({ message: "Error logging out", error: error.message });
+    }
+};
