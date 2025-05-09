@@ -292,7 +292,8 @@ exports.getAllAdmins = async (req, res) => {
       res.status(500).json({ success: false, message: "Server Error" });
     }
   };
-   exports.logout = async (req, res) => {
+
+  exports.logout = async (req, res) => {
     try {
         res.cookie("token", "", {
             httpOnly: true,
@@ -302,12 +303,14 @@ exports.getAllAdmins = async (req, res) => {
             expires: new Date(0)
         });
 
-        res.status(200).json({ message: "Logout successful!" });
-        console.log("Logged-in User ID:", req.user.userId);
-
-
+        console.log("Logged-out Admin ID:", req.admin?.adminId || "Unknown"); // Corrected logging
+        
+        res.status(200).json({ success: true, message: "Logout successful!" });
     } catch (error) {
         console.error("Logout error:", error.message);
-        res.status(500).json({ message: "Error logging out", error: error.message });
+        // Only send error if headers are not already sent
+        if (!res.headersSent) {
+            res.status(500).json({ success: false, message: "Error logging out", error: error.message });
+        }
     }
 };
