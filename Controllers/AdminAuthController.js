@@ -221,7 +221,7 @@ exports.getAllAdmins = async (req, res) => {
   };
   exports.getAdminById = async (req, res) => {
     try {
-      const { adminId } = req.params;
+      const  adminId  = req.admin?.adminId;
   
       const admin = await Admin.findById(adminId).select("-password"); // hide password
   
