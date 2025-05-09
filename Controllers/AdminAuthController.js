@@ -258,40 +258,56 @@ exports.getAllAdmins = async (req, res) => {
       res.status(500).json({ success: false, message: "Server Error" });
     }
   };
+
   exports.updateAdmin = async (req, res) => {
     try {
-      const { adminId } = req.params;
-      const { fullName, email, phone } = req.body;
-      const image = req.file?.path || undefined;
-  
-      const admin = await Admin.findById(adminId);
-      if (!admin) {
-        return res.status(404).json({ success: false, message: "Admin not found" });
-      }
-  
-      if (fullName) admin.fullName = fullName;
-      if (email) admin.email = email.toLowerCase();
-      if (phone) admin.phone = phone;
-      if (image) admin.image = image;
-  
-      await admin.save();
-  
-      res.status(200).json({
-        success: true,
-        message: "Admin updated successfully",
-        admin: {
-          id: admin._id,
-          fullName: admin.fullName,
-          email: admin.email,
-          phone: admin.phone,
-          image: admin.image,
+        const { adminId } = req.params;
+        const { fullName, email, phone } = req.body;
+        const image = req.file?.path || undefined;
+
+        // Find the admin by adminId
+        const admin = await Admin.findById(adminId);
+        if (!admin) {
+            return res.status(404).json({ success: false, message: "Admin not found" });
         }
-      });
+
+        // Only update fields that are provided and are actually different
+        if (fullName && admin.fullName !== fullName) admin.fullName = fullName;
+        if (email && admin.email !== email.toLowerCase()) admin.email = email.toLowerCase();
+        if (phone && admin.phone !== phone) admin.phone = phone;
+        if (image) admin.image = image;
+
+        // Save the updated admin details
+        await admin.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Admin updated successfully",
+            admin: {
+                id: admin._id,
+                fullName: admin.fullName,
+                email: admin.email,
+                phone: admin.phone,
+                image: admin.image,
+                role: admin.role, // Return the role as well
+            }
+        });
     } catch (error) {
-      console.error("Update Admin Error:", error);
-      res.status(500).json({ success: false, message: "Server Error" });
+        console.error("Update Admin Error:", error);
+        
+        // Special handling for duplicate key error
+        if (error.code === 11000) {
+            return res.status(400).json({
+                success: false,
+                message: "Phone number already exists. Please use a different phone number."
+            });
+        }
+
+        res.status(500).json({ success: false, message: "Server Error" });
     }
-  };
+};
+
+
 
   exports.logout = async (req, res) => {
     try {
