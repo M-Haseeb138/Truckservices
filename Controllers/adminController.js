@@ -215,6 +215,43 @@ exports.getPendingBookings = async (req, res) => {
         });
     }
 };
+exports.rejectTruck = async (req, res) => {
+    try {
+        const { truckId } = req.params;
+
+        const truck = await TruckRegistration.findById(truckId);
+        if (!truck) {
+            return res.status(404).json({ success: false, message: "Truck not found" });
+        }
+
+        truck.status = 'rejected';
+        truck.rejectedBy = req.admin.adminId;
+        truck.rejectionDate = new Date();
+        await truck.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Truck rejected successfully",
+            truck
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Server Error",
+            error: error.message
+        });
+    }
+};
+exports.getRejectedTrucks = async (req, res) => {
+    try {
+        const trucks = await TruckRegistration.find({ status: 'rejected' }).populate('userId');
+        res.status(200).json({ success: true, data: trucks });
+    } catch (error) {
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
+
+
 /////////////////////////
 exports.getAvailableDrivers = async (req, res) => {
     try {
@@ -266,10 +303,6 @@ exports.getDashboardStats = async (req, res) => {
         });
     }
 };
-
-
-
-
 // old apis
 exports.getPendingDrivers = async (req, res) => {
     try {

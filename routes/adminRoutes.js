@@ -8,6 +8,8 @@ const verifyAdmin = require("../Middlewares/adminAuthMiddleware");
 // Truck Approval
 router.get("/trucks/pending",verifyAdmin , authorizeRoles('admin'), adminController.getPendingTrucks);
 router.post("/trucks/approve/:truckId", verifyAdmin, authorizeRoles('admin'), adminController.approveTruck);
+router.post("/trucks/rejectTruck", verifyAdmin, authorizeRoles('admin'), adminController.rejectTruck);
+router.post("/trucks/getrejectedtrucks", verifyAdmin, authorizeRoles('admin'), adminController.getRejectedTrucks);
 
 // Driver Management
 router.get("/getalldrivers", verifyToken, authorizeRoles('admin'), adminController.getAllDrivers);
@@ -25,7 +27,7 @@ router.get('/trucks/available',
     adminController.getAvailableTrucks
   );
   router.get('/bookings/:bookingId/available-trucks',
-    verifyToken,
+    verifyAdmin,
     authorizeRoles('admin'),
     adminController.getAvailableTrucksForBooking
   );
