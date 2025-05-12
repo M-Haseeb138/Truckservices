@@ -132,38 +132,7 @@ exports.getPendingTrucks = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
-exports.getAvailableTrucks = async (req, res) => {
-    try {
-        const { truckType, weight } = req.query;
 
-        const filter = {
-            status: 'approved',
-            isAvailable: true
-        };
-
-        if (truckType) {
-            filter['truckDetails.typeOfTruck'] = truckType;
-        }
-
-        if (weight) {
-            filter['truckDetails.weight'] = weight;
-        }
-
-        const trucks = await TruckRegistration.find(filter)
-            .populate('userId', 'fullName phone');
-
-        res.status(200).json({
-            success: true,
-            data: trucks
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch available trucks",
-            error: error.message
-        });
-    }
-};
 
 exports.getPendingBookings = async (req, res) => {
     try {
@@ -218,13 +187,9 @@ exports.getRejectedTrucks = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
-// TruckController.js
-
-
-
 exports.getApprovedTrucks = async (req, res) => {
     try {
-        const approvedTrucks = await TruckRegistration.find({ status: 'approved' });
+        const approvedTrucks = await TruckRegistration.find({ status: 'approved' }).populate('userId');
 
         res.status(200).json({
             success: true,
@@ -334,6 +299,39 @@ exports.getAvailableTrucksForBooking = async (req, res) => {
             success: false, 
             message: "Failed to get available trucks",
             error: error.message 
+        });
+    }
+};
+
+exports.getAvailableTrucks = async (req, res) => {
+    try {
+        const { truckType, weight } = req.query;
+
+        const filter = {
+            status: 'approved',
+            isAvailable: true
+        };
+
+        if (truckType) {
+            filter['truckDetails.typeOfTruck'] = truckType;
+        }
+
+        if (weight) {
+            filter['truckDetails.weight'] = weight;
+        }
+
+        const trucks = await TruckRegistration.find(filter)
+            .populate('userId', 'fullName phone');
+
+        res.status(200).json({
+            success: true,
+            data: trucks
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch available trucks",
+            error: error.message
         });
     }
 };
