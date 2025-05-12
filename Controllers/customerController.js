@@ -2,6 +2,7 @@
 const TruckRegistration = require("../Models/truckRegister");
 const TruckBooking = require("../Models/TruckBooking");
 const User = require("../Models/userModel");
+const { generateUniqueTrackingId } = require('../utils/trackingGenerator');
 
 exports.bookTruck = async (req, res) => {
     try {
@@ -32,9 +33,13 @@ exports.bookTruck = async (req, res) => {
             });
         }
 
+        // Generate unique tracking ID
+        const trackingId = await generateUniqueTrackingId();
+
         // Create booking
         const newBooking = new TruckBooking({
             userId: req.user.userId,
+            trackingId,
             from,
             to,
             materials,
@@ -52,10 +57,24 @@ exports.bookTruck = async (req, res) => {
         res.status(201).json({ 
             success: true, 
             message: "Truck booking request submitted successfully", 
-            booking: newBooking 
+            booking: {
+                _id: newBooking._id,
+                trackingId: newBooking.trackingId,
+                from: newBooking.from,
+                to: newBooking.to,
+                scheduledDate: newBooking.scheduledDate,
+                status: newBooking.status,
+                customerName: newBooking.customerName,
+                customerPhone: newBooking.customerPhone,
+                materials:newBooking.materials,
+                weight:newBooking.weight,
+                truckTypes:newBooking.truckTypes,
+                noOfTrucks:newBooking.noOfTrucks
+            }
         });
 
     } catch (error) {
+        console.error("Booking error:", error);
         res.status(500).json({ 
             success: false, 
             message: "Booking failed",
@@ -63,7 +82,6 @@ exports.bookTruck = async (req, res) => {
         });
     }
 };
-
 exports.getMyBookings = async(req,res)=>{
 
     try {
@@ -82,7 +100,42 @@ exports.getMyBookings = async(req,res)=>{
         })
     }
 }
+// Get booking by tracking ID (for customers and admins)
+exports.getBookingByTrackingId = async (req, res) => {
+    try {
+        const { trackingId } = req.params;
 
+        const booking = await TruckBooking.findOne({ trackingId })
+            .populate('userId', 'fullName phone')
+            .populate('assignedDriverId', 'fullName phone');
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: "Booking not found"
+            });
+        }
+
+        // Authorization check
+        if (req.user.role !== 'admin' && booking.userId.toString() !== req.user.userId) {
+            return res.status(403).json({
+                success: false,
+                message: "Unauthorized to view this booking"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            booking
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Failed to get booking",
+            error: error.message
+        });
+    }
+};
 exports.cancelBooking = async (req, res) => {
     try {
       const { bookingId } = req.params;
@@ -134,3 +187,4 @@ exports.cancelBooking = async (req, res) => {
       });
     }
   };
+

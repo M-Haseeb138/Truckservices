@@ -136,7 +136,12 @@ const truckBookingSchema = new mongoose.Schema({
   },
   customerPhone: { 
     type: String 
-  }
+  },
+    trackingId: {
+        type: String,
+        unique: true,
+        required: true
+    }
 }, { timestamps: true });
 
 module.exports = mongoose.model("TruckBooking", truckBookingSchema);

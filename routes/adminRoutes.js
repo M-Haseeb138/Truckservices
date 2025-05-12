@@ -6,13 +6,13 @@ const { authorizeRoles } = require("../Middlewares/roleMiddleware");
 const verifyAdmin = require("../Middlewares/adminAuthMiddleware");
 
 // Truck Approval
-router.get("/trucks/pending", verifyToken, authorizeRoles('admin'), adminController.getPendingTrucks);
+router.get("/trucks/pending",verifyAdmin , authorizeRoles('admin'), adminController.getPendingTrucks);
 router.post("/trucks/approve/:truckId", verifyAdmin, authorizeRoles('admin'), adminController.approveTruck);
 
 // Driver Management
 router.get("/getalldrivers", verifyToken, authorizeRoles('admin'), adminController.getAllDrivers);
 router.get("/drivers/available", verifyToken, authorizeRoles('admin'), adminController.getAvailableDrivers);
-router.get("/bookings/pending", verifyToken, authorizeRoles('admin'), adminController.getPendingBookings);
+router.get("/bookings/pending", verifyAdmin, authorizeRoles('admin'), adminController.getPendingBookings);
 router.post("/bookings/approve/:bookingId/:truckId", verifyToken, authorizeRoles('admin'), adminController.approveBooking);
 router.post("/bookings/assign", verifyToken, authorizeRoles('admin'), adminController.assignDriver);
 // router.get('/drivers/pending', verifyToken, authorizeRoles('admin'), adminController.getPendingDrivers);
@@ -20,7 +20,7 @@ router.post("/bookings/assign", verifyToken, authorizeRoles('admin'), adminContr
 router.get("/dashboard/stats", verifyToken, authorizeRoles('admin'), adminController.getDashboardStats);
 
 router.get('/trucks/available', 
-    verifyToken, 
+    verifyAdmin, 
     authorizeRoles('admin'), 
     adminController.getAvailableTrucks
   );
