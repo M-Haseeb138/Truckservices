@@ -156,27 +156,23 @@ exports.rejectTruck = async (req, res) => {
     try {
         const { truckId } = req.params;
 
-        const truck = await TruckRegistration.findById(truckId);
-        if (!truck) {
+        const rejectedTruck = await TruckRegistration.findByIdAndUpdate(
+            truckId,
+            {
+                status: 'rejected',
+                isAvailable: false, // <-- Important
+                rejectionDate: new Date()
+            },
+            { new: true }
+        ).populate('userId');
+
+        if (!rejectedTruck) {
             return res.status(404).json({ success: false, message: "Truck not found" });
         }
 
-        truck.status = 'rejected';
-        truck.rejectedBy = req.admin.adminId;
-        truck.rejectionDate = new Date();
-        await truck.save();
-
-        res.status(200).json({
-            success: true,
-            message: "Truck rejected successfully",
-            truck
-        });
+        res.status(200).json({ success: true, data: rejectedTruck });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Server Error",
-            error: error.message
-        });
+        res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
 exports.getRejectedTrucks = async (req, res) => {
