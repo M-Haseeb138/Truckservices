@@ -19,15 +19,6 @@ const authorizeRoles = (...allowedRoles) => {
             });
         }
 
-        // 3. Additional driver approval check
-        if (req.user.role === 'driver' && !req.user.isApproved) {
-            console.log(`❌ [ROLE] Unapproved driver ${req.user.userId} access attempt`);
-            return res.status(403).json({
-                success: false,
-                message: "Forbidden: Driver account pending approval"
-            });
-        }
-
         console.log(`✅ [ROLE] ${req.user.role} authorized for ${allowedRoles}`);
         next();
     };

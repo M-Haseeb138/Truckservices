@@ -39,10 +39,6 @@ const UserSchema = new mongoose.Schema({
         enum: ['admin', 'driver', 'customer'],
         default: 'customer',
         required: true
-    },
-    isApproved: {
-        type: Boolean,
-        default: false
     }
 }, { timestamps: true });
 

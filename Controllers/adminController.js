@@ -14,16 +14,10 @@ exports.approveTruck = async (req, res) => {
 
         // Approve the truck
         truck.status = 'approved';
-        truck.approvedBy = req.user._id;
+         truck.approvedBy = req.admin.adminId;
         truck.approvalDate = new Date();
         await truck.save();
 
-        // Approve the driver if not already approved
-        const driver = await User.findById(truck.userId);
-        if (driver && !driver.isApproved) {
-            driver.isApproved = true;
-            await driver.save();
-        }
 
         res.status(200).json({
             message: "Truck approved successfully",
@@ -115,31 +109,31 @@ exports.getPendingBookings = async (req, res) => {
 // };
 
 
-exports.getPendingDrivers = async (req, res) => {
-    try {
-        const drivers = await User.find({
-            role: 'driver',
-            isApproved: false
-        }).select('-password');
-        res.status(200).json({ success: true, data: drivers });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Server Error", error: error.message });
-    }
-};
+// exports.getPendingDrivers = async (req, res) => {
+//     try {
+//         const drivers = await User.find({
+//             role: 'driver',
+//             isApproved: false
+//         }).select('-password');
+//         res.status(200).json({ success: true, data: drivers });
+//     } catch (error) {
+//         res.status(500).json({ success: false, message: "Server Error", error: error.message });
+//     }
+// };
 
-exports.approveDriver = async (req, res) => {
-    try {
-        const { driverId } = req.params;
-        const driver = await User.findByIdAndUpdate(
-            driverId,
-            { isApproved: true },
-            { new: true }
-        );
-        res.status(200).json({ success: true, message: "Driver approved", driver });
-    } catch (error) {
-        res.status(500).json({ success: false, message: "Server Error", error: error.message });
-    }
-};
+// exports.approveDriver = async (req, res) => {
+//     try {
+//         const { driverId } = req.params;
+//         const driver = await User.findByIdAndUpdate(
+//             driverId,
+//             { isApproved: true },
+//             { new: true }
+//         );
+//         res.status(200).json({ success: true, message: "Driver approved", driver });
+//     } catch (error) {
+//         res.status(500).json({ success: false, message: "Server Error", error: error.message });
+//     }
+// };
 
 exports.getAvailableDrivers = async (req, res) => {
     try {

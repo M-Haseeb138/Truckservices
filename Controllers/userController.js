@@ -46,8 +46,8 @@ exports.signup = async (req, res) => {
             password: hashedPassword,
             image,
             CNIC,
-            role: role || 'customer',
-            isApproved: role === 'customer' // Auto-approve customers
+            role: role || 'customer'
+    
         });
 
         await user.save();
@@ -67,8 +67,8 @@ exports.signup = async (req, res) => {
                 fullName: user.fullName,
                 phone: user.phone,
                 CNIC: user.CNIC,
-                role: user.role,
-                isApproved: user.isApproved
+                role: user.role
+        
             }
         });
     } catch (error) {

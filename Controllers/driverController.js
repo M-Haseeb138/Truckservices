@@ -96,88 +96,7 @@ const TruckBooking = require("../Models/TruckBooking");
 //     }
 // };
 
-exports.registerTruck = async (req, res) => {
-    try {
-        // 1. Get user data
-        const user = await User.findById(req.user.userId);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: "User not found"
-            });
-        }
 
-        // 2. Validate required files
-        const requiredFiles = [
-            'idCardFrontImage',
-            'idCardBackImage',
-            'licenseFrontImage',
-            'profilePicture',
-            'Truckdocument'
-        ];
-
-        const missingFiles = requiredFiles.filter(
-            file => !req.files?.[file]?.[0]?.path
-        );
-
-        if (missingFiles.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: `Missing required files: ${missingFiles.join(', ')}`
-            });
-        }
-
-        // 3. Create new truck using existing user data
-        const newTruck = new TruckRegistration({
-            ownerDetails: {
-                truckOwnerName: user.fullName, // Use from user record
-                mobileNo: user.phone,         // Use from user record
-                dateOfBirth: req.body.ownerDateOfBirth,
-                province: req.body.ownerProvince,
-                address: req.body.ownerAddress,
-                country: req.body.ownerCountry
-            },
-            driverDetails: {
-                truckDriverName: req.body.truckDriverName,
-                mobileNo: req.body.driverMobileNo,
-                dateOfBirth: req.body.driverDateOfBirth,
-                province: req.body.driverProvince,
-                address: req.body.driverAddress,
-                country: req.body.driverCountry,
-                city: req.body.driverCity,
-                lisenceNo: req.body.lisenceNo
-            },
-            idCardFrontImage: req.files.idCardFrontImage[0].path,
-            idCardBackImage: req.files.idCardBackImage[0].path,
-            licenseFrontImage: req.files.licenseFrontImage[0].path,
-            profilePicture: req.files.profilePicture[0].path,
-            truckDetails: {
-                typeOfTruck: req.body.typeOfTruck,
-                weight: req.body.weight,
-                Registercity: req.body.Registercity,
-                VehicleNo: req.body.VehicleNo,
-                Truckdocument: req.files.Truckdocument[0].path
-            },
-            userId: req.user.userId,
-            status: 'pending'
-        });
-
-        const savedTruck = await newTruck.save();
-
-        res.status(201).json({
-            success: true,
-            message: "Truck registration submitted for approval",
-            truck: savedTruck
-        });
-
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: "Registration failed",
-            error: error.message
-        });
-    }
-};
 exports.getMyTrucks = async (req, res) => {
     try {
         console.log("Current user ID:", req.user.userId); // ✅ Use userId
@@ -269,3 +188,131 @@ exports.updateAssignmentStatus = async (req, res) => {
         });
     }
 };
+
+exports.registerTruck = async (req, res) => {
+    try {
+     
+        const user = await User.findById(req.user.userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        // 3. Validate required files
+        const requiredFiles = [
+            'idCardFrontImage',
+            'idCardBackImage',
+            'licenseFrontImage',
+            'profilePicture',
+            'Truckdocument'
+        ];
+
+        const missingFiles = requiredFiles.filter(
+            file => !req.files?.[file]?.[0]?.path
+        );
+
+        if (missingFiles.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Missing required files: ${missingFiles.join(', ')}`
+            });
+        }
+
+        // 4. Driver details (truckDriverName and driver mobile always from user)
+        const driverDetails = {
+            truckDriverName: user.fullName,  // Always from user
+            mobileNo: user.phone,            // Always from user
+            email: user.email,               // Always from user
+            CNIC: user.CNIC,                 // Always from user
+            dateOfBirth: req.body.driverDateOfBirth,
+            province: req.body.driverProvince,
+            address: req.body.driverAddress,
+            country: req.body.driverCountry,
+            city: req.body.driverCity || '',
+            lisenceNo: req.body.lisenceNo || ''
+        };
+
+        // 5. Owner details (entered manually)
+        const ownerDetails = {
+            truckOwnerName: req.body.truckOwnerName,
+            mobileNo: req.body.ownerMobileNo,
+            dateOfBirth: req.body.ownerDateOfBirth,
+            province: req.body.ownerProvince,
+            address: req.body.ownerAddress,
+            country: req.body.ownerCountry
+        };
+
+        // 6. Validate mandatory driver fields
+        if (!driverDetails.dateOfBirth || !driverDetails.province || !driverDetails.address || !driverDetails.country) {
+            return res.status(400).json({
+                success: false,
+                message: "Driver's province, country, address, and date of birth are required"
+            });
+        }
+
+        // 7. Validate mandatory owner fields
+        if (!ownerDetails.truckOwnerName || !ownerDetails.mobileNo || !ownerDetails.dateOfBirth || !ownerDetails.province || !ownerDetails.address || !ownerDetails.country) {
+            return res.status(400).json({
+                success: false,
+                message: "Owner name, mobile, DOB, province, address, and country are required"
+            });
+        }
+
+        // 8. Build Truck object
+        const newTruck = new TruckRegistration({
+            ownerDetails,
+            driverDetails,
+            idCardFrontImage: req.files.idCardFrontImage[0].path,
+            idCardBackImage: req.files.idCardBackImage[0].path,
+            licenseFrontImage: req.files.licenseFrontImage[0].path,
+            profilePicture: req.files.profilePicture[0].path,
+            truckDetails: {
+                typeOfTruck: req.body.typeOfTruck,
+                weight: req.body.weight,
+                Registercity: req.body.Registercity,
+                VehicleNo: req.body.VehicleNo,
+                Truckdocument: req.files.Truckdocument[0].path
+            },
+            userId: req.user.userId,
+            status: 'pending'
+        });
+
+        // 9. Save to database
+        const savedTruck = await newTruck.save();
+
+        // 10. Return success response
+        res.status(201).json({
+            success: true,
+            message: "Truck registration submitted for approval",
+            truck: {
+                _id: savedTruck._id,
+                ownerDetails: savedTruck.ownerDetails,
+                driverDetails: savedTruck.driverDetails,
+                truckDetails: savedTruck.truckDetails,
+                status: savedTruck.status,
+                createdAt: savedTruck.createdAt
+            }
+        });
+
+    } catch (error) {
+        console.error("Truck registration error:", error);
+
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({
+                success: false,
+                message: "Validation failed",
+                error: error.message
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            message: "Truck registration failed",
+            error: error.message
+        });
+    }
+};
+
+

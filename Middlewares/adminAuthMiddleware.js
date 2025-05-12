@@ -24,7 +24,11 @@ const verifyAdminToken = async (req, res, next) => {
             return res.status(401).json({ success: false, message: "Admin not found." });
         }
 
-        req.admin = { adminId: admin._id };
+           req.admin = { adminId: admin._id };
+        req.user = { 
+            userId: admin._id, 
+            role: 'admin' 
+        };
         next();
     } catch (error) {
         console.error("Token error:", error.message);
