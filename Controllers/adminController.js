@@ -164,39 +164,7 @@ exports.getAvailableTrucks = async (req, res) => {
         });
     }
 };
-exports.getAvailableTrucksForBooking = async (req, res) => {
-    try {
-        const { bookingId } = req.params;
-        
-        // 1. Get booking requirements
-        const booking = await TruckBooking.findById(bookingId);
-        if (!booking) {
-            return res.status(404).json({ 
-                success: false,
-                message: "Booking not found" 
-            });
-        }
 
-        // 2. Find matching available trucks
-        const trucks = await TruckRegistration.find({
-            status: 'approved',
-            isAvailable: true,
-            'truckDetails.typeOfTruck': { $in: booking.truckTypes },
-            'truckDetails.weight': booking.weight
-        }).populate('userId', 'fullName phone');
-
-        res.status(200).json({ 
-            success: true, 
-            data: trucks 
-        });
-    } catch (error) {
-        res.status(500).json({ 
-            success: false, 
-            message: "Failed to get available trucks",
-            error: error.message 
-        });
-    }
-};
 exports.getPendingBookings = async (req, res) => {
     try {
         const bookings = await TruckBooking.find({ status: 'pending' })
@@ -250,7 +218,28 @@ exports.getRejectedTrucks = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
+// TruckController.js
 
+
+
+exports.getApprovedTrucks = async (req, res) => {
+    try {
+        const approvedTrucks = await TruckRegistration.find({ status: 'approved' });
+
+        res.status(200).json({
+            success: true,
+            count: approvedTrucks.length,
+            trucks: approvedTrucks
+        });
+    } catch (error) {
+        console.error("Error fetching approved trucks:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch approved trucks",
+            error: error.message
+        });
+    }
+};
 
 /////////////////////////
 exports.getAvailableDrivers = async (req, res) => {
@@ -313,5 +302,38 @@ exports.getPendingDrivers = async (req, res) => {
         res.status(200).json({ success: true, data: drivers });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
+    }
+};
+exports.getAvailableTrucksForBooking = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        
+        // 1. Get booking requirements
+        const booking = await TruckBooking.findById(bookingId);
+        if (!booking) {
+            return res.status(404).json({ 
+                success: false,
+                message: "Booking not found" 
+            });
+        }
+
+        // 2. Find matching available trucks
+        const trucks = await TruckRegistration.find({
+            status: 'approved',
+            isAvailable: true,
+            'truckDetails.typeOfTruck': { $in: booking.truckTypes },
+            'truckDetails.weight': booking.weight
+        }).populate('userId', 'fullName phone');
+
+        res.status(200).json({ 
+            success: true, 
+            data: trucks 
+        });
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            message: "Failed to get available trucks",
+            error: error.message 
+        });
     }
 };
