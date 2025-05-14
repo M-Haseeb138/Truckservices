@@ -18,7 +18,8 @@ router.get("/trucks/getrejectedtrucks", verifyAdmin, authorizeRoles('admin'), ad
 router.get("/bookings/pending", verifyAdmin, authorizeRoles('admin'), adminController.getPendingBookings);
 router.post("/bookings/approve/:bookingId/:truckId", verifyToken, authorizeRoles('admin'), adminController.approveBooking);
 router.get("/bookings/approved-drivers", verifyAdmin, authorizeRoles('admin'), adminController.getApprovedDrivers);
-
+router.get('/bookings/:bookingId/matching-drivers',verifyAdmin, adminController.getMatchingDriversForBooking);
+router.post('/bookings/assign-driver', verifyAdmin, adminController.assignDriverToBooking);
 
 // User Management 
 router.get("/getRegisteredCustomers", verifyAdmin, authorizeRoles('admin'), adminController.getRegisteredCustomers);
