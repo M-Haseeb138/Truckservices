@@ -12,3 +12,4 @@ router.delete("/deleteuser", verifyToken, authController.deleteUser);
 router.post("/logout", verifyToken, authController.logout);
 
 module.exports = router;
+

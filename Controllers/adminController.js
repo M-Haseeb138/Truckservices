@@ -245,7 +245,28 @@ exports.getApprovedDrivers = async (req, res) => {
         });
     }
 };
-
+exports.getRegisteredCustomers = async (req, res) =>{
+       try {
+        const customer = await User.find({role:'customer'})
+        .select('-password')
+        .sort({createdAt:-1});
+        res.status(200).json(
+            {
+                success:true,
+                count:customer.length,
+                customer
+            }
+        )
+       } catch (error) {
+        console.error("error Fetching customer",error);
+        res.status(500).json({
+            sucess:false,
+            message:"Failed to fetch customer",
+            error:error.message
+       });
+    
+}
+  }
 
 
 

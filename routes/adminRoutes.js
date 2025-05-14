@@ -19,6 +19,16 @@ router.get("/bookings/pending", verifyAdmin, authorizeRoles('admin'), adminContr
 router.post("/bookings/approve/:bookingId/:truckId", verifyToken, authorizeRoles('admin'), adminController.approveBooking);
 router.get("/bookings/approved-drivers", verifyAdmin, authorizeRoles('admin'), adminController.getApprovedDrivers);
 
+
+// User Management 
+router.get("/getRegisteredCustomers", verifyAdmin, authorizeRoles('admin'), adminController.getRegisteredCustomers);
+
+
+
+
+
+
+
 // router.post("/bookings/assign", verifyToken, authorizeRoles('admin'), adminController.assignDriver);
 // router.get('/drivers/pending', verifyToken, authorizeRoles('admin'), adminController.getPendingDrivers);
 // router.put('/drivers/approve/:driverId', verifyToken, authorizeRoles('admin'), adminController.approveDriver);
