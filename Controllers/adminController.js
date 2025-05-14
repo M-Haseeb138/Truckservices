@@ -200,42 +200,102 @@ exports.getApprovedTrucks = async (req, res) => {
     }
 };
 
+// exports.getApprovedDrivers = async (req, res) => {
+//     try {
+//         // First get all approved trucks
+//         const approvedTrucks = await TruckRegistration.find({ status: 'approved' })
+//             .populate('userId', 'fullName phone email CNIC role');
+
+//         // Create a map to store unique drivers
+//         const uniqueDrivers = new Map();
+
+//         // Process each truck to extract driver info
+//         approvedTrucks.forEach(truck => {
+//             const driverId = truck.userId._id.toString();
+            
+//             // If driver not already in map, add them
+//             if (!uniqueDrivers.has(driverId)) {
+//                 uniqueDrivers.set(driverId, {
+//                     _id: truck.userId._id,
+//                     fullName: truck.userId.fullName,
+//                     phone: truck.userId.phone,
+//                     email: truck.userId.email,
+//                     CNIC: truck.userId.CNIC,
+//                     role: truck.userId.role,
+//                     driverDetails: truck.driverDetails, // Include driver details from truck registration
+//                     registrationDate: truck.createdAt // When the truck was registered
+//                 });
+//             }
+//         });
+
+//         // Convert map values to array
+//         const drivers = Array.from(uniqueDrivers.values());
+
+//         res.status(200).json({
+//             success: true,
+//             count: drivers.length,
+//             drivers
+//         });
+//     } catch (error) {
+//         console.error("Error fetching approved drivers:", error);
+//         res.status(500).json({
+//             success: false,
+//             message: "Failed to fetch approved drivers",
+//             error: error.message
+//         });
+//     }
+// };
+
 exports.getApprovedDrivers = async (req, res) => {
     try {
-        // First get all approved trucks
+        // 1. Find all approved trucks, along with user details
         const approvedTrucks = await TruckRegistration.find({ status: 'approved' })
             .populate('userId', 'fullName phone email CNIC role');
 
-        // Create a map to store unique drivers
-        const uniqueDrivers = new Map();
+        // 2. Create a map to group trucks by driver
+        const driverMap = new Map();
 
-        // Process each truck to extract driver info
         approvedTrucks.forEach(truck => {
             const driverId = truck.userId._id.toString();
-            
-            // If driver not already in map, add them
-            if (!uniqueDrivers.has(driverId)) {
-                uniqueDrivers.set(driverId, {
+
+            // Initialize driver if not already added
+            if (!driverMap.has(driverId)) {
+                driverMap.set(driverId, {
                     _id: truck.userId._id,
                     fullName: truck.userId.fullName,
                     phone: truck.userId.phone,
                     email: truck.userId.email,
                     CNIC: truck.userId.CNIC,
                     role: truck.userId.role,
-                    driverDetails: truck.driverDetails, // Include driver details from truck registration
-                    registrationDate: truck.createdAt // When the truck was registered
+                    trucks: [] // Will hold all their approved trucks
                 });
             }
+
+            // Add current truck details to the driver's truck list
+            driverMap.get(driverId).trucks.push({
+                _id: truck._id,
+                driverDetails: truck.driverDetails,
+                ownerDetails: truck.ownerDetails,
+                truckDetails: truck.truckDetails,
+                idCardFrontImage: truck.idCardFrontImage,
+                idCardBackImage: truck.idCardBackImage,
+                licenseFrontImage: truck.licenseFrontImage,
+                profilePicture: truck.profilePicture,
+                Truckdocument: truck.truckDetails.Truckdocument,
+                registrationDate: truck.createdAt,
+                status: truck.status
+            });
         });
 
-        // Convert map values to array
-        const drivers = Array.from(uniqueDrivers.values());
+        // 3. Convert map values to array
+        const drivers = Array.from(driverMap.values());
 
         res.status(200).json({
             success: true,
             count: drivers.length,
             drivers
         });
+
     } catch (error) {
         console.error("Error fetching approved drivers:", error);
         res.status(500).json({
@@ -245,6 +305,7 @@ exports.getApprovedDrivers = async (req, res) => {
         });
     }
 };
+
 exports.getRegisteredCustomers = async (req, res) =>{
        try {
         const customer = await User.find({role:'customer'})
