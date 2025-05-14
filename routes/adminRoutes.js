@@ -13,25 +13,27 @@ router.post("/trucks/rejectTruck/:truckId", verifyAdmin, authorizeRoles('admin')
 router.get("/trucks/getrejectedtrucks", verifyAdmin, authorizeRoles('admin'), adminController.getRejectedTrucks);
 
 // Driver Management
-router.get("/getalldrivers", verifyToken, authorizeRoles('admin'), adminController.getAllDrivers);
-router.get("/drivers/available", verifyToken, authorizeRoles('admin'), adminController.getAvailableDrivers);
+// router.get("/getalldrivers", verifyToken, authorizeRoles('admin'), adminController.getAllDrivers);
+// router.get("/drivers/available", verifyToken, authorizeRoles('admin'), adminController.getAvailableDrivers);
 router.get("/bookings/pending", verifyAdmin, authorizeRoles('admin'), adminController.getPendingBookings);
 router.post("/bookings/approve/:bookingId/:truckId", verifyToken, authorizeRoles('admin'), adminController.approveBooking);
-router.post("/bookings/assign", verifyToken, authorizeRoles('admin'), adminController.assignDriver);
+router.get("/bookings/approved-drivers", verifyAdmin, authorizeRoles('admin'), adminController.getApprovedDrivers);
+
+// router.post("/bookings/assign", verifyToken, authorizeRoles('admin'), adminController.assignDriver);
 // router.get('/drivers/pending', verifyToken, authorizeRoles('admin'), adminController.getPendingDrivers);
 // router.put('/drivers/approve/:driverId', verifyToken, authorizeRoles('admin'), adminController.approveDriver);
-router.get("/dashboard/stats", verifyToken, authorizeRoles('admin'), adminController.getDashboardStats);
+// router.get("/dashboard/stats", verifyToken, authorizeRoles('admin'), adminController.getDashboardStats);
 
-router.get('/trucks/available', 
-    verifyAdmin, 
-    authorizeRoles('admin'), 
-    adminController.getAvailableTrucks
-  );
-  router.get('/bookings/:bookingId/available-trucks',
-    verifyAdmin,
-    authorizeRoles('admin'),
-    adminController.getAvailableTrucksForBooking
-  );
+// router.get('/trucks/available', 
+//     verifyAdmin, 
+//     authorizeRoles('admin'), 
+//     adminController.getAvailableTrucks
+//   );
+//   router.get('/bookings/:bookingId/available-trucks',
+//     verifyAdmin,
+//     authorizeRoles('admin'),
+//     adminController.getAvailableTrucksForBooking
+//   );
   
 module.exports = router;
 

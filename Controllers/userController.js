@@ -3,7 +3,6 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const cloudinary = require("../config/cloudinary");
 
-
 exports.signup = async (req, res) => {
     try {
         const { fullName, email, password, phone, CNIC, role } = req.body;
@@ -75,7 +74,6 @@ exports.signup = async (req, res) => {
         res.status(500).json({ message: "Server error", error: error.message });
     }
 };
-
 exports.login = async (req, res) => {
     try {
         const { phone, password } = req.body;
@@ -116,7 +114,6 @@ exports.login = async (req, res) => {
         res.status(500).json({ message: "Server error", error: error.message });
     }
 };
-
 exports.getUser = async (req, res) => {
     try {
         if (!req.user || !req.user.userId) {
@@ -147,8 +144,6 @@ exports.getUser = async (req, res) => {
         res.status(500).json({ message: "Error fetching user", error: error.message });
     }
 };
-
-
 exports.updateUser = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -220,7 +215,6 @@ exports.updateUser = async (req, res) => {
         res.status(500).json({ message: "Error updating user", error: error.message });
     }
 };
-
 exports.deleteUser = async (req, res) => {
     try {
         const userId = req.user?.userId;
@@ -245,7 +239,6 @@ exports.deleteUser = async (req, res) => {
         return res.status(500).json({ message: "Error deleting user", error: error.message });
     }
 };
-
 exports.logout = async (req, res) => {
     try {
         res.cookie("token", "", {
