@@ -17,7 +17,7 @@ const truckSchema = new mongoose.Schema({
         address: { type: String, required: true },
         country: { type: String, required: true },
         city: { type: String, required: true },
-        lisenceNo:{type:String,required:true}
+        lisenceNo: { type: String, required: true }
     },
     idCardFrontImage: { type: String, required: true },
     idCardBackImage: { type: String, required: true },
@@ -28,26 +28,32 @@ const truckSchema = new mongoose.Schema({
         weight: { type: String, required: true },
         Registercity: { type: String, required: true },
         VehicleNo: { type: String, required: true },
-        Truckdocument:{type:String,require:true}
+        Truckdocument: { type: String, require: true }
     },
-    userId: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: "User", 
-        required: true 
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
     },
-    status: { 
-        type: String, 
-        enum: ['pending', 'approved', 'rejected'], 
-        default: 'pending' 
+    status: {
+        type: String,
+        enum: ['pending', 'approved', 'rejected'],
+        default: 'pending'
     },
-    approvedBy: { 
-        type: mongoose.Schema.Types.ObjectId, 
-        ref: "User" 
+    approvedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
     },
     isAvailable: {
         type: Boolean,
         default: true
-      },
+    },
+
+    bookingStatus: {
+        type: String,
+        enum: ['available', 'assigned', 'in-progress', 'maintenance'],
+        default: 'available'
+    },
     approvalDate: { type: Date },
     rejectionDate: { type: Date }
 

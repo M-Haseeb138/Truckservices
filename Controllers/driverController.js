@@ -218,3 +218,51 @@ exports.registerTruck = async (req, res) => {
 };
 
 
+exports.completeBooking = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+
+        const booking = await TruckBooking.findById(bookingId);
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: "Booking not found"
+            });
+        }
+
+        if (booking.status !== 'in-progress') {
+            return res.status(400).json({
+                success: false,
+                message: "Only in-progress bookings can be completed"
+            });
+        }
+
+        // Update booking status
+        booking.status = 'completed';
+        booking.completionDate = new Date();
+        
+        // Update truck status
+        const truck = await TruckRegistration.findById(booking.truckId);
+        if (truck) {
+            truck.isAvailable = true;
+            truck.bookingStatus = 'available';
+            await truck.save();
+        }
+
+        await booking.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Booking marked as completed",
+            booking
+        });
+
+    } catch (error) {
+        console.error("Error completing booking:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to complete booking",
+            error: error.message
+        });
+    }
+};

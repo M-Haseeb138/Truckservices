@@ -135,14 +135,91 @@ exports.getRejectedTrucks = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
+
+// exports.getApprovedTrucks = async (req, res) => {
+//     try {
+//         const approvedTrucks = await TruckRegistration.find({ status: 'approved' })
+//             .populate('userId')
+//             .lean(); // Convert to plain JS objects
+
+//         // Add booking status and update isAvailable for each truck
+//         const trucksWithStatus = await Promise.all(approvedTrucks.map(async (truck) => {
+//             const booking = await TruckBooking.findOne({
+//                 truckId: truck._id,
+//                 status: { $in: ['assigned', 'in-progress'] }
+//             });
+
+//             const isAvailable = !booking; // true if no active booking, false otherwise
+//             const bookingStatus = booking ? 'booked' : 'available';
+
+//             return {
+//                 ...truck,
+//                 isAvailable, // Update the isAvailable field
+//                 bookingStatus // Add booking status
+//             };
+//         }));
+
+//         res.status(200).json({
+//             success: true,
+//             count: trucksWithStatus.length,
+//             trucks: trucksWithStatus
+//         });
+//     } catch (error) {
+//         console.error("Error fetching approved trucks:", error);
+//         res.status(500).json({
+//             success: false,
+//             message: "Failed to fetch approved trucks",
+//             error: error.message
+//         });
+//     }
+// };
+
 exports.getApprovedTrucks = async (req, res) => {
     try {
-        const approvedTrucks = await TruckRegistration.find({ status: 'approved' }).populate('userId');
+        // First get all approved trucks
+        const approvedTrucks = await TruckRegistration.find({ status: 'approved' })
+            .populate('userId')
+            .lean();
+
+        // Then check each truck's booking status to ensure consistency
+        const trucksWithVerifiedStatus = await Promise.all(approvedTrucks.map(async (truck) => {
+            // Check if there's an active booking for this truck
+            const activeBooking = await TruckBooking.findOne({
+                truckId: truck._id,
+                status: { $in: ['assigned', 'in-progress'] }
+            });
+
+            // If database status doesn't match reality, update it
+            if (activeBooking && (truck.isAvailable || truck.bookingStatus === 'available')) {
+                await TruckRegistration.findByIdAndUpdate(truck._id, {
+                    isAvailable: false,
+                    bookingStatus: 'assigned'
+                });
+                return {
+                    ...truck,
+                    isAvailable: false,
+                    bookingStatus: 'assigned'
+                };
+            } else if (!activeBooking && (!truck.isAvailable || truck.bookingStatus !== 'available')) {
+                await TruckRegistration.findByIdAndUpdate(truck._id, {
+                    isAvailable: true,
+                    bookingStatus: 'available'
+                });
+                return {
+                    ...truck,
+                    isAvailable: true,
+                    bookingStatus: 'available'
+                };
+            }
+
+            // If status is correct, return as-is
+            return truck;
+        }));
 
         res.status(200).json({
             success: true,
-            count: approvedTrucks.length,
-            trucks: approvedTrucks
+            count: trucksWithVerifiedStatus.length,
+            trucks: trucksWithVerifiedStatus
         });
     } catch (error) {
         console.error("Error fetching approved trucks:", error);
@@ -155,9 +232,17 @@ exports.getApprovedTrucks = async (req, res) => {
 };
 exports.getApprovedDrivers = async (req, res) => {
     try {
-        // 1. Find all approved trucks, along with user details
-        const approvedTrucks = await TruckRegistration.find({ status: 'approved' })
-            .populate('userId', 'fullName phone email CNIC role');
+
+        // 1. Find all drivers with assigned bookings
+        const assignedDriverIds = await TruckBooking.distinct('assignedDriverId', {
+            status: { $in: ['assigned', 'in-progress'] }
+        });
+
+        // 2. Find all approved trucks, along with user details, excluding assigned drivers
+        const approvedTrucks = await TruckRegistration.find({
+            status: 'approved',
+            userId: { $nin: assignedDriverIds }
+        }).populate('userId', 'fullName phone email CNIC role');
 
         // 2. Create a map to group trucks by driver
         const driverMap = new Map();
@@ -247,12 +332,18 @@ exports.getMatchingDriversForBooking = async (req, res) => {
             });
         }
 
-        // 2. Find all approved trucks that match the booking requirements and are available
+        // 2. Find all drivers with assigned bookings
+        const assignedDriverIds = await TruckBooking.distinct('assignedDriverId', {
+            status: { $in: ['assigned', 'in-progress'] }
+        });
+
+        // 3. Find all approved trucks that match the booking requirements and are available
         const matchingTrucks = await TruckRegistration.find({
             status: 'approved',
             isAvailable: true,
             'truckDetails.typeOfTruck': { $in: booking.truckTypes },
-            'truckDetails.weight': booking.weight
+            'truckDetails.weight': booking.weight,
+            userId: { $nin: assignedDriverIds } // Exclude drivers with assigned bookings
         }).populate('userId', 'fullName phone email');
 
         // 3. If no matches found, explain why
@@ -388,7 +479,7 @@ exports.assignDriverToBooking = async (req, res) => {
         }
 
         // 4. Check if truck matches booking requirements
-        if (!booking.truckTypes.includes(truck.truckDetails.typeOfTruck) || 
+        if (!booking.truckTypes.includes(truck.truckDetails.typeOfTruck) ||
             booking.weight !== truck.truckDetails.weight) {
             return res.status(400).json({
                 success: false,
@@ -404,6 +495,7 @@ exports.assignDriverToBooking = async (req, res) => {
         booking.approvalDate = new Date();
 
         truck.isAvailable = false;
+        truck.bookingStatus = 'assigned'; // Add this line to update bookingStatus
 
         // 6. Save changes in a transaction
         await Promise.all([
@@ -435,31 +527,3 @@ exports.assignDriverToBooking = async (req, res) => {
         });
     }
 };
-
-
-
-
-/////////////////////////
-// exports.getDashboardStats = async (req, res) => {
-//     try {
-//         const stats = {
-//             pending: await TruckBooking.countDocuments({ status: 'pending' }),
-//             assigned: await TruckBooking.countDocuments({ status: 'assigned' }),
-//             inProgress: await TruckBooking.countDocuments({ status: 'in-progress' }),
-//             completed: await TruckBooking.countDocuments({ status: 'completed' }),
-//             drivers: await User.countDocuments({ role: 'driver', isApproved: true })
-//         };
-
-//         res.status(200).json({
-//             success: true,
-//             data: stats
-//         });
-//     } catch (error) {
-//         res.status(500).json({
-//             success: false,
-//             message: "Failed to get dashboard stats",
-//             error: error.message
-//         });
-//     }
-// };
-
