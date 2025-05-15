@@ -90,6 +90,7 @@ exports.getPendingBookings = async (req, res) => {
     try {
         const bookings = await TruckBooking.find({ status: 'pending' })
             .populate('userId', 'fullName phone')
+            .populate('truckId') 
             .sort({ createdAt: -1 });
 
         res.status(200).json({
@@ -133,101 +134,6 @@ exports.getRejectedTrucks = async (req, res) => {
         res.status(200).json({ success: true, data: trucks });
     } catch (error) {
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
-    }
-};
-
-// exports.getApprovedTrucks = async (req, res) => {
-//     try {
-//         const approvedTrucks = await TruckRegistration.find({ status: 'approved' })
-//             .populate('userId')
-//             .lean(); // Convert to plain JS objects
-
-//         // Add booking status and update isAvailable for each truck
-//         const trucksWithStatus = await Promise.all(approvedTrucks.map(async (truck) => {
-//             const booking = await TruckBooking.findOne({
-//                 truckId: truck._id,
-//                 status: { $in: ['assigned', 'in-progress'] }
-//             });
-
-//             const isAvailable = !booking; // true if no active booking, false otherwise
-//             const bookingStatus = booking ? 'booked' : 'available';
-
-//             return {
-//                 ...truck,
-//                 isAvailable, // Update the isAvailable field
-//                 bookingStatus // Add booking status
-//             };
-//         }));
-
-//         res.status(200).json({
-//             success: true,
-//             count: trucksWithStatus.length,
-//             trucks: trucksWithStatus
-//         });
-//     } catch (error) {
-//         console.error("Error fetching approved trucks:", error);
-//         res.status(500).json({
-//             success: false,
-//             message: "Failed to fetch approved trucks",
-//             error: error.message
-//         });
-//     }
-// };
-
-exports.getApprovedTrucks = async (req, res) => {
-    try {
-        // First get all approved trucks
-        const approvedTrucks = await TruckRegistration.find({ status: 'approved' })
-            .populate('userId')
-            .lean();
-
-        // Then check each truck's booking status to ensure consistency
-        const trucksWithVerifiedStatus = await Promise.all(approvedTrucks.map(async (truck) => {
-            // Check if there's an active booking for this truck
-            const activeBooking = await TruckBooking.findOne({
-                truckId: truck._id,
-                status: { $in: ['assigned', 'in-progress'] }
-            });
-
-            // If database status doesn't match reality, update it
-            if (activeBooking && (truck.isAvailable || truck.bookingStatus === 'available')) {
-                await TruckRegistration.findByIdAndUpdate(truck._id, {
-                    isAvailable: false,
-                    bookingStatus: 'assigned'
-                });
-                return {
-                    ...truck,
-                    isAvailable: false,
-                    bookingStatus: 'assigned'
-                };
-            } else if (!activeBooking && (!truck.isAvailable || truck.bookingStatus !== 'available')) {
-                await TruckRegistration.findByIdAndUpdate(truck._id, {
-                    isAvailable: true,
-                    bookingStatus: 'available'
-                });
-                return {
-                    ...truck,
-                    isAvailable: true,
-                    bookingStatus: 'available'
-                };
-            }
-
-            // If status is correct, return as-is
-            return truck;
-        }));
-
-        res.status(200).json({
-            success: true,
-            count: trucksWithVerifiedStatus.length,
-            trucks: trucksWithVerifiedStatus
-        });
-    } catch (error) {
-        console.error("Error fetching approved trucks:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch approved trucks",
-            error: error.message
-        });
     }
 };
 exports.getApprovedDrivers = async (req, res) => {
@@ -332,43 +238,49 @@ exports.getMatchingDriversForBooking = async (req, res) => {
             });
         }
 
+        // Normalize weight strings by trimming and standardizing
+        const normalizeWeight = (weight) => {
+            return weight.replace(/\s+/g, ' ').trim().toLowerCase();
+        };
+
+        const bookingWeight = normalizeWeight(booking.weight);
+
         // 2. Find all drivers with assigned bookings
         const assignedDriverIds = await TruckBooking.distinct('assignedDriverId', {
             status: { $in: ['assigned', 'in-progress'] }
         });
 
-        // 3. Find all approved trucks that match the booking requirements and are available
-        const matchingTrucks = await TruckRegistration.find({
+        // 3. Find all approved trucks that match the booking requirements
+        const allPotentialTrucks = await TruckRegistration.find({
             status: 'approved',
-            isAvailable: true,
             'truckDetails.typeOfTruck': { $in: booking.truckTypes },
-            'truckDetails.weight': booking.weight,
-            userId: { $nin: assignedDriverIds } // Exclude drivers with assigned bookings
+            userId: { $nin: assignedDriverIds }
         }).populate('userId', 'fullName phone email');
 
-        // 3. If no matches found, explain why
+        // Filter trucks that match both type and normalized weight
+        const matchingTrucks = allPotentialTrucks.filter(truck => {
+            const truckWeight = normalizeWeight(truck.truckDetails.weight);
+            return truckWeight === bookingWeight && truck.isAvailable;
+        });
+
+        // 4. If no matches found, explain why
         if (matchingTrucks.length === 0) {
-            // Find why no matches - check availability first
-            const unavailableTrucks = await TruckRegistration.find({
-                'truckDetails.typeOfTruck': { $in: booking.truckTypes },
-                'truckDetails.weight': booking.weight,
-                status: 'approved',
-                isAvailable: false
-            }).countDocuments();
+            // Find why no matches
+            const unavailableTrucks = allPotentialTrucks.filter(truck => {
+                const truckWeight = normalizeWeight(truck.truckDetails.weight);
+                return truckWeight === bookingWeight && !truck.isAvailable;
+            }).length;
 
-            // Check if any trucks match type but not weight
-            const wrongWeightTrucks = await TruckRegistration.find({
-                'truckDetails.typeOfTruck': { $in: booking.truckTypes },
-                'truckDetails.weight': { $ne: booking.weight },
-                status: 'approved'
-            }).countDocuments();
+            const wrongWeightTrucks = allPotentialTrucks.filter(truck => {
+                const truckWeight = normalizeWeight(truck.truckDetails.weight);
+                return truckWeight !== bookingWeight;
+            }).length;
 
-            // Check if any trucks match weight but not type
-            const wrongTypeTrucks = await TruckRegistration.find({
+            const wrongTypeTrucks = await TruckRegistration.countDocuments({
                 'truckDetails.typeOfTruck': { $nin: booking.truckTypes },
                 'truckDetails.weight': booking.weight,
                 status: 'approved'
-            }).countDocuments();
+            });
 
             return res.status(200).json({
                 success: true,
@@ -389,7 +301,7 @@ exports.getMatchingDriversForBooking = async (req, res) => {
             });
         }
 
-        // 4. Group trucks by driver
+        // 5. Group trucks by driver
         const driverMap = new Map();
 
         matchingTrucks.forEach(truck => {
@@ -436,11 +348,120 @@ exports.getMatchingDriversForBooking = async (req, res) => {
         });
     }
 };
+
+
+// exports.assignDriverToBooking = async (req, res) => {
+//     try {
+//         const { bookingId, driverId, truckId } = req.body;
+
+//         // 1. Validate all required fields
+//         if (!bookingId || !driverId || !truckId) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Booking ID, Driver ID and Truck ID are required"
+//             });
+//         }
+
+//         // 2. Find and validate the booking
+//         const booking = await TruckBooking.findById(bookingId);
+//         if (!booking) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "Booking not found"
+//             });
+//         }
+//         if (booking.status !== 'pending') {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Only pending bookings can be assigned"
+//             });
+//         }
+
+//         // 3. Find and validate the truck
+//         const truck = await TruckRegistration.findOne({
+//             _id: truckId,
+//             userId: driverId,
+//             status: 'approved',
+//             isAvailable: true
+//         });
+
+//         if (!truck) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Truck not found or not available"
+//             });
+//         }
+
+//         // 4. Normalize weight strings for comparison
+//         const normalizeWeight = (weight) => {
+//             return weight.replace(/\s+/g, ' ').trim().toLowerCase();
+//         };
+
+//         // Check if truck matches booking requirements
+//         const bookingWeight = normalizeWeight(booking.weight);
+//         const truckWeight = normalizeWeight(truck.truckDetails.weight);
+        
+//         if (!booking.truckTypes.includes(truck.truckDetails.typeOfTruck) ||
+//             bookingWeight !== truckWeight) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Selected truck doesn't match booking requirements",
+//                 details: {
+//                     bookingTypes: booking.truckTypes,
+//                     truckType: truck.truckDetails.typeOfTruck,
+//                     bookingWeight: booking.weight,
+//                     truckWeight: truck.truckDetails.weight,
+//                     normalizedBookingWeight: bookingWeight,
+//                     normalizedTruckWeight: truckWeight
+//                 }
+//             });
+//         }
+
+//         // 5. Update the booking and truck status
+//         booking.assignedDriverId = driverId;
+//         booking.truckId = truckId;
+//         booking.status = 'assigned';
+//         booking.approvedBy = req.admin.adminId;
+//         booking.approvalDate = new Date();
+
+//         truck.isAvailable = false;
+//         truck.bookingStatus = 'assigned';
+
+//         // 6. Save changes in a transaction
+//         await Promise.all([
+//             booking.save(),
+//             truck.save()
+//         ]);
+
+//         res.status(200).json({
+//             success: true,
+//             message: "Driver assigned successfully",
+//             booking: {
+//                 _id: booking._id,
+//                 trackingId: booking.trackingId,
+//                 assignedDriverId: booking.assignedDriverId,
+//                 truckId: booking.truckId,
+//                 status: booking.status,
+//                 from: booking.from,
+//                 to: booking.to,
+//                 scheduledDate: booking.scheduledDate
+//             }
+//         });
+
+//     } catch (error) {
+//         console.error("Error assigning driver:", error);
+//         res.status(500).json({
+//             success: false,
+//             message: "Failed to assign driver",
+//             error: error.message
+//         });
+//     }
+// };
+
 exports.assignDriverToBooking = async (req, res) => {
     try {
         const { bookingId, driverId, truckId } = req.body;
 
-        // 1. Validate all required fields
         if (!bookingId || !driverId || !truckId) {
             return res.status(400).json({
                 success: false,
@@ -448,7 +469,6 @@ exports.assignDriverToBooking = async (req, res) => {
             });
         }
 
-        // 2. Find and validate the booking
         const booking = await TruckBooking.findById(bookingId);
         if (!booking) {
             return res.status(404).json({
@@ -456,6 +476,7 @@ exports.assignDriverToBooking = async (req, res) => {
                 message: "Booking not found"
             });
         }
+
         if (booking.status !== 'pending') {
             return res.status(400).json({
                 success: false,
@@ -463,7 +484,6 @@ exports.assignDriverToBooking = async (req, res) => {
             });
         }
 
-        // 3. Find and validate the truck
         const truck = await TruckRegistration.findOne({
             _id: truckId,
             userId: driverId,
@@ -478,51 +498,102 @@ exports.assignDriverToBooking = async (req, res) => {
             });
         }
 
-        // 4. Check if truck matches booking requirements
+        const normalizeWeight = (weight) => {
+            return weight.replace(/\s+/g, ' ').trim().toLowerCase();
+        };
+
+        const bookingWeight = normalizeWeight(booking.weight);
+        const truckWeight = normalizeWeight(truck.truckDetails.weight);
+
         if (!booking.truckTypes.includes(truck.truckDetails.typeOfTruck) ||
-            booking.weight !== truck.truckDetails.weight) {
+            bookingWeight !== truckWeight) {
             return res.status(400).json({
                 success: false,
-                message: "Selected truck doesn't match booking requirements"
+                message: "Selected truck doesn't match booking requirements",
+                details: {
+                    bookingTypes: booking.truckTypes,
+                    truckType: truck.truckDetails.typeOfTruck,
+                    bookingWeight: booking.weight,
+                    truckWeight: truck.truckDetails.weight
+                }
             });
         }
 
-        // 5. Update the booking and truck status
-        booking.assignedDriverId = driverId;
-        booking.truckId = truckId;
-        booking.status = 'assigned';
-        booking.approvedBy = req.admin.adminId;
-        booking.approvalDate = new Date();
-
-        truck.isAvailable = false;
-        truck.bookingStatus = 'assigned'; // Add this line to update bookingStatus
-
-        // 6. Save changes in a transaction
+        // Update both records in a transaction
         await Promise.all([
-            booking.save(),
-            truck.save()
+            TruckBooking.findByIdAndUpdate(bookingId, {
+                truckId: truckId,
+                assignedDriverId: driverId,
+                status: 'assigned',
+                approvalDate: new Date(),
+                approvedBy: req.admin.adminId
+            }),
+            TruckRegistration.findByIdAndUpdate(truckId, {
+                isAvailable: false,
+                bookingStatus: 'assigned'
+            })
         ]);
+
+        const updatedBooking = await TruckBooking.findById(bookingId);
 
         res.status(200).json({
             success: true,
-            message: "Driver assigned successfully",
-            booking: {
-                _id: booking._id,
-                trackingId: booking.trackingId,
-                assignedDriverId: booking.assignedDriverId,
-                truckId: booking.truckId,
-                status: booking.status,
-                from: booking.from,
-                to: booking.to,
-                scheduledDate: booking.scheduledDate
-            }
+            message: "Driver and truck assigned to booking",
+            booking: updatedBooking
         });
 
     } catch (error) {
-        console.error("Error assigning driver:", error);
+        console.error("Assign driver error:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to assign driver",
+            message: "Server Error",
+            error: error.message
+        });
+    }
+};
+
+exports.getApprovedTrucks = async (req, res) => {
+    try {
+        // First get all approved trucks with their current status
+        const approvedTrucks = await TruckRegistration.find({ status: 'approved' })
+            .populate('userId')
+            .lean();
+
+        // Get all active bookings in a single query for better performance
+        const activeBookings = await TruckBooking.find({
+            status: { $in: ['assigned', 'in-progress'] },
+            truckId: { $ne: null } // Ensure truckId exists
+        }).select('truckId status');
+
+        // Create a map of truckIds to their booking status
+        const bookingStatusMap = new Map();
+        activeBookings.forEach(booking => {
+            if (booking.truckId) { // Check if truckId exists
+                bookingStatusMap.set(booking.truckId.toString(), booking.status);
+            }
+        });
+
+        // Process each truck
+        const trucksWithStatus = approvedTrucks.map(truck => {
+            const hasActiveBooking = bookingStatusMap.has(truck._id.toString());
+            
+            return {
+                ...truck,
+                isAvailable: !hasActiveBooking,
+                bookingStatus: hasActiveBooking ? 'assigned' : 'available'
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            count: trucksWithStatus.length,
+            trucks: trucksWithStatus
+        });
+    } catch (error) {
+        console.error("Error fetching approved trucks:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch approved trucks",
             error: error.message
         });
     }

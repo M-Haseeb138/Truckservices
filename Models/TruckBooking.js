@@ -141,7 +141,12 @@ const truckBookingSchema = new mongoose.Schema({
         type: String,
         unique: true,
         required: true
-    }
+    },
+    truckId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "TruckRegistration"
+},
+
 }, { timestamps: true });
 
 module.exports = mongoose.model("TruckBooking", truckBookingSchema);
