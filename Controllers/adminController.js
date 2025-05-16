@@ -629,3 +629,25 @@ exports.getApprovedTrucks = async (req, res) => {
         });
     }
 };
+
+exports.getAllDrivers = async (req, res) => {
+    try {
+        // Find all users with role 'driver' and populate their truck information
+        const drivers = await User.find({ role: 'driver' })
+            .select('-password') // Exclude password field
+            .sort({ createdAt: -1 }); // Sort by newest first
+
+        res.status(200).json({
+            success: true,
+            count: drivers.length,
+            drivers
+        });
+    } catch (error) {
+        console.error("Error fetching drivers:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch drivers",
+            error: error.message
+        });
+    }
+};

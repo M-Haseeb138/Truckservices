@@ -20,6 +20,7 @@ router.post("/bookings/approve/:bookingId/:truckId", verifyToken, authorizeRoles
 router.get("/bookings/approved-drivers", verifyAdmin, authorizeRoles('admin'), adminController.getApprovedDrivers);
 router.get('/bookings/:bookingId/matching-drivers',verifyAdmin, adminController.getMatchingDriversForBooking);
 router.post('/bookings/assign-driver', verifyAdmin, adminController.assignDriverToBooking);
+router.get('/getAllDrivers', verifyAdmin, adminController.getAllDrivers);
 
 // User Management 
 router.get("/getRegisteredCustomers", verifyAdmin, authorizeRoles('admin'), adminController.getRegisteredCustomers);
