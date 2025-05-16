@@ -30,15 +30,28 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: false
     },
-    CNIC:{
-        type:String,
-        required:true,
+    CNIC: {
+        type: String,
+        required: true,
     },
     role: {
         type: String,
         enum: ['admin', 'driver', 'customer'],
         default: 'customer',
         required: true
+    },
+    status: {
+        type: String,
+        enum: ['active', 'suspended'],
+        default: 'active'
+    },
+    suspensionReason: {
+        type: String,
+        required: false
+    },
+    suspendedAt: {
+        type: Date,
+        required: false
     }
 }, { timestamps: true });
 

@@ -21,6 +21,11 @@ router.get("/bookings/approved-drivers", verifyAdmin, authorizeRoles('admin'), a
 router.get('/bookings/:bookingId/matching-drivers',verifyAdmin, adminController.getMatchingDriversForBooking);
 router.post('/bookings/assign-driver', verifyAdmin, adminController.assignDriverToBooking);
 router.get('/getAllDrivers', verifyAdmin, adminController.getAllDrivers);
+router.get('/getAllsuspendedDriver', verifyAdmin, adminController.getAllsuspendedDriver);
+router.post('/suspendDriver/:driverId', verifyAdmin, adminController.suspendDriver);
+router.post('/RestoredDriver/:driverId', verifyAdmin, adminController.restoresuspendedDriver);
+
+
 
 // User Management 
 router.get("/getRegisteredCustomers", verifyAdmin, authorizeRoles('admin'), adminController.getRegisteredCustomers);

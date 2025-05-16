@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 
 
 
+
 exports.approveBooking = async (req, res) => {
     try {
         const { bookingId, truckId } = req.params;
@@ -92,7 +93,7 @@ exports.getPendingBookings = async (req, res) => {
     try {
         const bookings = await TruckBooking.find({ status: 'pending' })
             .populate('userId', 'fullName phone')
-            .populate('truckId') 
+            .populate('truckId')
             .sort({ createdAt: -1 });
 
         res.status(200).json({
@@ -266,15 +267,15 @@ exports.getMatchingDriversForBooking = async (req, res) => {
         // 4. Filter trucks that match requirements
         const matchingTrucks = allPotentialTrucks.filter(truck => {
             // Check truck type (case-insensitive and partial match)
-            const typeMatches = booking.truckTypes.some(bookingType => 
-                truck.truckDetails.typeOfTruck.toLowerCase().includes(bookingType.toLowerCase()) || 
+            const typeMatches = booking.truckTypes.some(bookingType =>
+                truck.truckDetails.typeOfTruck.toLowerCase().includes(bookingType.toLowerCase()) ||
                 bookingType.toLowerCase().includes(truck.truckDetails.typeOfTruck.toLowerCase())
             );
-            
+
             // Check weight
             const truckWeight = normalizeWeight(truck.truckDetails.weight);
             const weightMatches = truckWeight === bookingWeight;
-            
+
             return typeMatches && weightMatches;
         });
 
@@ -288,11 +289,11 @@ exports.getMatchingDriversForBooking = async (req, res) => {
             };
 
             allPotentialTrucks.forEach(truck => {
-                const typeMatches = booking.truckTypes.some(bookingType => 
-                    truck.truckDetails.typeOfTruck.toLowerCase().includes(bookingType.toLowerCase()) || 
+                const typeMatches = booking.truckTypes.some(bookingType =>
+                    truck.truckDetails.typeOfTruck.toLowerCase().includes(bookingType.toLowerCase()) ||
                     bookingType.toLowerCase().includes(truck.truckDetails.typeOfTruck.toLowerCase())
                 );
-                
+
                 const truckWeight = normalizeWeight(truck.truckDetails.weight);
                 const weightMatches = truckWeight === bookingWeight;
 
@@ -410,7 +411,7 @@ exports.getMatchingDriversForBooking = async (req, res) => {
 //         // Check if truck matches booking requirements
 //         const bookingWeight = normalizeWeight(booking.weight);
 //         const truckWeight = normalizeWeight(truck.truckDetails.weight);
-        
+
 //         if (!booking.truckTypes.includes(truck.truckDetails.typeOfTruck) ||
 //             bookingWeight !== truckWeight) {
 //             return res.status(400).json({
@@ -579,7 +580,6 @@ exports.assignDriverToBooking = async (req, res) => {
         });
     }
 };
-
 exports.getApprovedTrucks = async (req, res) => {
     try {
         // Get all approved trucks
@@ -629,25 +629,151 @@ exports.getApprovedTrucks = async (req, res) => {
         });
     }
 };
-
 exports.getAllDrivers = async (req, res) => {
     try {
-        // Find all users with role 'driver' and populate their truck information
-        const drivers = await User.find({ role: 'driver' })
-            .select('-password') // Exclude password field
-            .sort({ createdAt: -1 }); // Sort by newest first
-
+        const drivers = await User.find({
+            role: 'driver',
+            status: 'active'
+        })
+            .select('-password')
+            .sort({ createdAt: -1 });
         res.status(200).json({
-            success: true,
+            sucess: true,
             count: drivers.length,
             drivers
-        });
+        })
+
     } catch (error) {
         console.error("Error fetching drivers:", error);
         res.status(500).json({
+            sucess: false,
+            message: "Failed to Fetch drivers",
+            error: error.message
+        })
+
+    }
+}
+exports.suspendDriver = async (req, res) => {
+    try {
+        const driverId = req.params.driverId;
+        const reason = req.body.reason;
+
+        console.log("Suspending driver:", driverId, "Reason:", reason);
+
+        if (!reason || typeof reason !== 'string') {
+            return res.status(400).json({
+                success: false,
+                message: "Suspension reason is required and must be a string"
+            });
+        }
+
+        const driver = await User.findByIdAndUpdate(
+            driverId,
+            {
+                status: 'suspended',
+                suspensionReason: reason,
+                suspendedAt: new Date()
+            },
+            { new: true }
+        ).select('-password');
+
+        if (!driver) {
+            return res.status(404).json({
+                success: false,
+                message: "Driver not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Driver suspended successfully",
+            driver
+        });
+
+    } catch (error) {
+        console.error("Error suspending driver:", error);
+        res.status(500).json({
             success: false,
-            message: "Failed to fetch drivers",
+            message: "Failed to suspend driver",
             error: error.message
         });
     }
 };
+
+exports.getAllsuspendedDriver = async (req, res) => {
+    try {
+        const suspendedDrivers = await User.find({
+            role: 'driver',
+            status: 'suspended'
+        }).select('-password');
+
+        if (!suspendedDrivers || suspendedDrivers.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No suspended drivers found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Suspended drivers found",
+            count: suspendedDrivers.length,
+            suspendedDrivers
+        });
+
+    } catch (error) {
+        console.error("Error fetching suspended drivers:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch suspended drivers",
+            error: error.message
+        });
+    }
+};
+
+exports.restoresuspendedDriver = async (req, res) => {
+    try {
+        const driverId = req.params.driverId;
+
+        const driver = await User.findByIdAndUpdate(
+            driverId,
+            {
+                status: 'active',
+                $unset: {
+                    suspensionReason: 1,
+                    suspendedAt: 1
+                }
+            },
+            { new: true }
+        ).select('-password');
+
+        if (!driver) {
+            return res.status(404).json({
+                success: false,
+                message: "Driver Not Found",
+            });
+        }
+
+        if (driver.status !== "active") {
+            return res.status(400).json({
+                success: false,
+                message: "Driver is not suspended",
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Driver has been restored successfully",
+            data: driver,
+        });
+
+    } catch (error) {
+        console.error("Error Restoring Driver:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to Restore the Driver",
+            error: error.message
+        });
+    }
+};
+
