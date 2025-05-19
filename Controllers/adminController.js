@@ -954,6 +954,92 @@ exports.cancelBooking = async (req, res) => {
     }
 };
 
+exports.getTotalorderchart = async (req, res) => {
+    try {
+        const orderStatuses = await TruckBooking.aggregate([
+            {
+                $match: {
+                    status: { $in: ['pending', 'assigned', 'in-progress', 'completed', 'cancelled'] }
+                }
+            },
+            {
+                $group: {
+                    _id: '$status',
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $project: {
+                    status: '$_id',
+                    count: 1,
+                    _id: 0
+                }
+            }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: orderStatuses
+        });
+    } catch (error) {
+        console.error("Error fetching order growth:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch order growth", error: error.message });
+    }
+};
+exports.getCustomerGrowth = async (req, res) => {
+    try {
+        const customerGrowth = await User.aggregate([
+            {
+                $match: { role: 'customer', createdAt: { $exists: true } }
+            },
+            {
+                $group: {
+                    _id: {
+                        year: { $year: '$createdAt' },
+                        month: { $month: '$createdAt' }
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { '_id.year': 1, '_id.month': 1 }
+            },
+            {
+                $project: {
+                    month: {
+                        $dateToString: {
+                            format: '%Y-%m',
+                            date: {
+                                $dateFromParts: {
+                                    year: '$_id.year',
+                                    month: '$_id.month',
+                                    day: 1
+                                }
+                            }
+                        }
+                    },
+                    count: 1,
+                    _id: 0
+                }
+            }
+        ]);
+
+        const totalCustomers = await User.countDocuments({ role: 'customer' });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                customerGrowth,
+                totalCustomers
+            }
+        });
+    } catch (error) {
+        console.error("Error fetching customer growth:", error);
+        res.status(500).json({ success: false, message: "Failed to fetch customer growth", error: error.message });
+    }
+};
+
+
 // Get booking timeline
 // exports.getBookingTimeline = async (req, res) => {
 //     try {

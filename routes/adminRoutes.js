@@ -31,6 +31,9 @@ router.get("/getRegisteredCustomers", verifyAdmin, authorizeRoles('admin'), admi
 router.get('/getallorders', verifyAdmin, adminController.getAllOrders);
 router.get('/getallcancelorders', verifyAdmin, adminController.getCancelledOrders);
 router.put('/cancelbookings/:bookingId', verifyAdmin, adminController.cancelBooking);
+router.get('/getTotalorderchart', verifyAdmin, adminController.getTotalorderchart);
+router.get('/getCustomerGrowth', verifyAdmin, adminController.getCustomerGrowth);
+
 
 
 
