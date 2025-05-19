@@ -8,7 +8,6 @@ exports.signup = async (req, res) => {
         const { fullName, email, password, phone, CNIC, role } = req.body;
         const image = req.file?.path || null;
 
-        // Validation
         if (!fullName || !password || !phone || !CNIC) {
             return res.status(400).json({ message: "Full name, password, phone number, and CNIC are required" });
         }

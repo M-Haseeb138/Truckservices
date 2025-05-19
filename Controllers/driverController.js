@@ -16,18 +16,21 @@ exports.getMyTrucks = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error", error: error.message });
     }
 };
-exports.getMyAssignments = async (req, res) => {
+// Get all assigned and in-progress jobs for driver
+exports.getDriverAssignments = async (req, res) => {
     try {
         const assignments = await TruckBooking.find({
             assignedDriverId: req.user.userId,
             status: { $in: ['assigned', 'in-progress'] }
         })
-            .populate('userId', 'fullName phone')
-            .sort({ scheduledDate: 1 });
+        .populate('userId', 'fullName phone')
+        .populate('truckId', 'truckDetails.VehicleNo')
+        .sort({ scheduledDate: 1 });
 
         res.status(200).json({
             success: true,
-            data: assignments
+            count: assignments.length,
+            assignments
         });
     } catch (error) {
         res.status(500).json({
@@ -37,15 +40,17 @@ exports.getMyAssignments = async (req, res) => {
         });
     }
 };
+// Update assignment status (for drivers)
 exports.updateAssignmentStatus = async (req, res) => {
     try {
-        const { bookingId, status } = req.body;
+        const { bookingId, status, notes } = req.body;
 
         // Validate booking exists and belongs to this driver
         const booking = await TruckBooking.findOne({
             _id: bookingId,
             assignedDriverId: req.user.userId
-        });
+        }).populate('truckId');
+
         if (!booking) {
             return res.status(404).json({
                 success: false,
@@ -55,33 +60,61 @@ exports.updateAssignmentStatus = async (req, res) => {
 
         // Validate status transition
         const validTransitions = {
-            'assigned': 'in-progress',
-            'in-progress': 'completed'
+            'assigned': ['in-progress', 'cancelled'],
+            'in-progress': ['completed', 'cancelled']
         };
 
-        if (!validTransitions[booking.status] || validTransitions[booking.status] !== status) {
+        if (!validTransitions[booking.status] || !validTransitions[booking.status].includes(status)) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid status transition"
+                message: `Invalid status transition from ${booking.status} to ${status}`
             });
         }
 
-        // Update truck availability when job is completed
-        if (status === 'completed' && booking.truckId) {
-            await TruckRegistration.findByIdAndUpdate(
-                booking.truckId,
-                { isAvailable: true }
-            );
+        // Start transaction
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // Update booking status
+            booking.status = status;
+            
+            // Record status change
+            booking.statusHistory.push({
+                status,
+                changedAt: new Date(),
+                changedBy: req.user.userId,
+                notes
+            });
+
+            // Set specific timestamps
+            if (status === 'in-progress') {
+                booking.startedAt = new Date();
+            } else if (status === 'completed') {
+                booking.completedAt = new Date();
+                if (booking.truckId) {
+                    booking.truckId.isAvailable = true;
+                    await booking.truckId.save({ session });
+                }
+            }
+
+            await booking.save({ session });
+            await session.commitTransaction();
+            session.endSession();
+
+            // TODO: Send notification to customer about status change
+
+            res.status(200).json({
+                success: true,
+                message: "Status updated successfully",
+                booking
+            });
+
+        } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
+            throw error;
         }
-
-        booking.status = status;
-        await booking.save();
-
-        res.status(200).json({
-            success: true,
-            message: "Status updated successfully",
-            booking
-        });
 
     } catch (error) {
         res.status(500).json({
@@ -91,6 +124,7 @@ exports.updateAssignmentStatus = async (req, res) => {
         });
     }
 };
+
 exports.registerTruck = async (req, res) => {
     try {
      
@@ -217,45 +251,84 @@ exports.registerTruck = async (req, res) => {
     }
 };
 
+///////////
 
+// Complete a booking
 exports.completeBooking = async (req, res) => {
     try {
         const { bookingId } = req.params;
 
-        const booking = await TruckBooking.findById(bookingId);
-        if (!booking) {
-            return res.status(404).json({
-                success: false,
-                message: "Booking not found"
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // Find the booking
+            const booking = await TruckBooking.findById(bookingId).session(session);
+            if (!booking) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(404).json({
+                    success: false,
+                    message: "Booking not found"
+                });
+            }
+
+            // Check if booking can be completed
+            if (booking.status === 'completed') {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: "Booking is already completed"
+                });
+            }
+
+            if (booking.status === 'cancelled') {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: "Cancelled bookings cannot be completed"
+                });
+            }
+
+            // Update booking status
+            booking.status = 'completed';
+            booking.completedAt = new Date();
+            booking.completedBy = req.admin.adminId;
+            await booking.save({ session });
+
+            // Make the truck available again
+            if (booking.truckId) {
+                await TruckRegistration.findByIdAndUpdate(
+                    booking.truckId,
+                    {
+                        isAvailable: true,
+                        bookingStatus: 'available'
+                    },
+                    { session }
+                );
+            }
+
+            await session.commitTransaction();
+            session.endSession();
+
+            const updatedBooking = await TruckBooking.findById(bookingId)
+                .populate('userId', 'fullName phone email')
+                .populate('assignedDriverId', 'fullName phone')
+                .populate('truckId');
+
+            res.status(200).json({
+                success: true,
+                message: "Booking completed successfully",
+                booking: updatedBooking
             });
+
+        } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
+            throw error;
         }
-
-        if (booking.status !== 'in-progress') {
-            return res.status(400).json({
-                success: false,
-                message: "Only in-progress bookings can be completed"
-            });
-        }
-
-        // Update booking status
-        booking.status = 'completed';
-        booking.completionDate = new Date();
-        
-        // Update truck status
-        const truck = await TruckRegistration.findById(booking.truckId);
-        if (truck) {
-            truck.isAvailable = true;
-            truck.bookingStatus = 'available';
-            await truck.save();
-        }
-
-        await booking.save();
-
-        res.status(200).json({
-            success: true,
-            message: "Booking marked as completed",
-            booking
-        });
 
     } catch (error) {
         console.error("Error completing booking:", error);

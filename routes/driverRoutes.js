@@ -19,7 +19,7 @@ router.post("/trucks/register",
     driverController.registerTruck
 );
 router.get("/MyTrucks", verifyToken, authorizeRoles('driver'), driverController.getMyTrucks);
-router.get("/getmyassignments", verifyToken, authorizeRoles('driver'), driverController.getMyAssignments);
+router.get("/getmyassignments", verifyToken, authorizeRoles('driver'), driverController.getDriverAssignments);
 router.put("/assignments/status", verifyToken, authorizeRoles('driver'), driverController.updateAssignmentStatus);
 router.put("/assignments/:bookingId", verifyToken, authorizeRoles('driver'), driverController.completeBooking);
 module.exports = router;

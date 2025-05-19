@@ -1,132 +1,85 @@
-// Get all active customers
-exports.getAllCustomers = async (req, res) => {
+exports.assignDriverToBooking = async (req, res) => {
     try {
-        const customers = await User.find({ 
-            role: 'customer',
-            status: 'active'
-        })
-        .select('-password')
-        .sort({ createdAt: -1 });
+        const { bookingId, driverId, truckId } = req.body;
 
-        res.status(200).json({
-            success: true,
-            count: customers.length,
-            customers
-        });
-    } catch (error) {
-        console.error("Error fetching customers:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch customers",
-            error: error.message
-        });
-    }
-};
+        // Start transaction
+        const session = await mongoose.startSession();
+        session.startTransaction();
 
-// Suspend a customer
-exports.suspendCustomer = async (req, res) => {
-    try {
-        const { customerId } = req.params;
-        const { reason } = req.body;
+        try {
+            // Find and validate booking
+            const booking = await TruckBooking.findById(bookingId)
+                .session(session)
+                .populate('userId', 'fullName phone');
 
-        const customer = await User.findByIdAndUpdate(
-            customerId,
-            {
-                status: 'suspended',
-                suspensionReason: reason,
-                suspendedAt: new Date()
-            },
-            { new: true }
-        ).select('-password');
+            if (!booking) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(404).json({
+                    success: false,
+                    message: "Booking not found"
+                });
+            }
 
-        if (!customer) {
-            return res.status(404).json({
-                success: false,
-                message: "Customer not found"
+            // Find and validate truck and driver
+            const truck = await TruckRegistration.findOne({
+                _id: truckId,
+                userId: driverId,
+                status: 'approved'
+            }).session(session);
+
+            if (!truck) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: "Truck not found or not approved"
+                });
+            }
+
+            // Update booking
+            booking.assignedDriverId = driverId;
+            booking.truckId = truckId;
+            booking.status = 'assigned';
+            booking.assignedAt = new Date();
+            booking.approvedBy = req.admin.adminId;
+            
+            // Update truck status
+            truck.isAvailable = false;
+            truck.bookingStatus = 'assigned';
+
+            await Promise.all([
+                booking.save({ session }),
+                truck.save({ session })
+            ]);
+
+            await session.commitTransaction();
+            session.endSession();
+
+            // Get fully populated booking for response
+            const updatedBooking = await TruckBooking.findById(bookingId)
+                .populate('userId', 'fullName phone email')
+                .populate('assignedDriverId', 'fullName phone')
+                .populate('truckId');
+
+            res.status(200).json({
+                success: true,
+                message: "Driver and truck assigned successfully",
+                booking: updatedBooking
             });
+
+        } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
+            throw error;
         }
 
-        res.status(200).json({
-            success: true,
-            message: "Customer suspended successfully",
-            customer
-        });
     } catch (error) {
-        console.error("Error suspending customer:", error);
+        console.error("Error assigning driver:", error);
         res.status(500).json({
             success: false,
-            message: "Failed to suspend customer",
+            message: "Failed to assign driver",
             error: error.message
         });
     }
 };
-
-// Get all suspended customers
-exports.getSuspendedCustomers = async (req, res) => {
-    try {
-        const customers = await User.find({ 
-            role: 'customer',
-            status: 'suspended'
-        })
-        .select('-password')
-        .sort({ suspendedAt: -1 });
-
-        res.status(200).json({
-            success: true,
-            count: customers.length,
-            customers
-        });
-    } catch (error) {
-        console.error("Error fetching suspended customers:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to fetch suspended customers",
-            error: error.message
-        });
-    }
-};
-
-// Restore a suspended customer
-exports.restoreCustomer = async (req, res) => {
-    try {
-        const { customerId } = req.params;
-
-        const customer = await User.findByIdAndUpdate(
-            customerId,
-            {
-                status: 'active',
-                $unset: {
-                    suspensionReason: 1,
-                    suspendedAt: 1
-                }
-            },
-            { new: true }
-        ).select('-password');
-
-        if (!customer) {
-            return res.status(404).json({
-                success: false,
-                message: "Customer not found"
-            });
-        }
-
-        res.status(200).json({
-            success: true,
-            message: "Customer restored successfully",
-            customer
-        });
-    } catch (error) {
-        console.error("Error restoring customer:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to restore customer",
-            error: error.message
-        });
-    }
-};
-
-// Customer routes
-router.get('/customers', authenticateAdmin, adminController.getAllCustomers);
-router.get('/customers/suspended', authenticateAdmin, adminController.getSuspendedCustomers);
-router.put('/customers/:customerId/suspend', authenticateAdmin, adminController.suspendCustomer);
-router.put('/customers/:customerId/restore', authenticateAdmin, adminController.restoreCustomer);

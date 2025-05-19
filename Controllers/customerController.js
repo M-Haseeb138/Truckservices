@@ -136,55 +136,38 @@ exports.getBookingByTrackingId = async (req, res) => {
         });
     }
 };
-exports.cancelBooking = async (req, res) => {
+exports.cancelPendingBooking = async (req, res) => {
     try {
-      const { bookingId } = req.params;
-  
-      // 1. Find booking
-      const booking = await TruckBooking.findOne({
-        _id: bookingId,
-        userId: req.user.userId
-      });
-  
-      if (!booking) {
-        return res.status(404).json({
-          success: false,
-          message: "Booking not found or unauthorized"
-        });
-      }
-  
-      // 2. Check if cancellation is allowed
-      if (booking.status !== 'pending') {
-        return res.status(400).json({
-          success: false,
-          message: "Only pending bookings can be cancelled"
-        });
-      }
-  
-      // 3. Update booking status
-      booking.status = 'cancelled';
-      await booking.save();
-  
-      // 4. If truck was assigned, mark it available again
-      if (booking.truckId) {
-        await TruckRegistration.findByIdAndUpdate(
-          booking.truckId,
-          { isAvailable: true }
-        );
-      }
-  
-      res.status(200).json({
-        success: true,
-        message: "Booking cancelled successfully",
-        booking
-      });
-  
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: "Failed to cancel booking",
-        error: error.message
-      });
-    }
-  };
+        const { bookingId } = req.params;
 
+        const booking = await TruckBooking.findOne({
+            _id: bookingId,
+            userId: req.user.userId,
+            status: 'pending'
+        });
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: "Pending booking not found or already processed"
+            });
+        }
+
+        booking.status = 'cancelled';
+        booking.cancellationReason = "Cancelled by customer";
+        booking.cancelledAt = new Date();
+        await booking.save();
+
+        res.status(200).json({
+            success: true,
+            message: "Booking cancelled successfully",
+            booking
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Failed to cancel booking",
+            error: error.message
+        });
+    }
+};

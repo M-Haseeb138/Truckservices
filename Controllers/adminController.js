@@ -4,9 +4,6 @@ const TruckRegistration = require("../Models/truckRegister");
 const TruckBooking = require("../Models/TruckBooking");
 const mongoose = require('mongoose');
 
-
-
-
 exports.approveBooking = async (req, res) => {
     try {
         const { bookingId, truckId } = req.params;
@@ -360,12 +357,11 @@ exports.getMatchingDriversForBooking = async (req, res) => {
         });
     }
 };
-
 // exports.assignDriverToBooking = async (req, res) => {
 //     try {
 //         const { bookingId, driverId, truckId } = req.body;
 
-//         // 1. Validate all required fields
+//         // Validate input
 //         if (!bookingId || !driverId || !truckId) {
 //             return res.status(400).json({
 //                 success: false,
@@ -373,91 +369,95 @@ exports.getMatchingDriversForBooking = async (req, res) => {
 //             });
 //         }
 
-//         // 2. Find and validate the booking
-//         const booking = await TruckBooking.findById(bookingId);
-//         if (!booking) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "Booking not found"
-//             });
-//         }
-//         if (booking.status !== 'pending') {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Only pending bookings can be assigned"
-//             });
-//         }
+//         // Start a session for transaction
+//         const session = await mongoose.startSession();
+//         session.startTransaction();
 
-//         // 3. Find and validate the truck
-//         const truck = await TruckRegistration.findOne({
-//             _id: truckId,
-//             userId: driverId,
-//             status: 'approved',
-//             isAvailable: true
-//         });
-
-//         if (!truck) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Truck not found or not available"
-//             });
-//         }
-
-//         // 4. Normalize weight strings for comparison
-//         const normalizeWeight = (weight) => {
-//             return weight.replace(/\s+/g, ' ').trim().toLowerCase();
-//         };
-
-//         // Check if truck matches booking requirements
-//         const bookingWeight = normalizeWeight(booking.weight);
-//         const truckWeight = normalizeWeight(truck.truckDetails.weight);
-
-//         if (!booking.truckTypes.includes(truck.truckDetails.typeOfTruck) ||
-//             bookingWeight !== truckWeight) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Selected truck doesn't match booking requirements",
-//                 details: {
-//                     bookingTypes: booking.truckTypes,
-//                     truckType: truck.truckDetails.typeOfTruck,
-//                     bookingWeight: booking.weight,
-//                     truckWeight: truck.truckDetails.weight,
-//                     normalizedBookingWeight: bookingWeight,
-//                     normalizedTruckWeight: truckWeight
-//                 }
-//             });
-//         }
-
-//         // 5. Update the booking and truck status
-//         booking.assignedDriverId = driverId;
-//         booking.truckId = truckId;
-//         booking.status = 'assigned';
-//         booking.approvedBy = req.admin.adminId;
-//         booking.approvalDate = new Date();
-
-//         truck.isAvailable = false;
-//         truck.bookingStatus = 'assigned';
-
-//         // 6. Save changes in a transaction
-//         await Promise.all([
-//             booking.save(),
-//             truck.save()
-//         ]);
-
-//         res.status(200).json({
-//             success: true,
-//             message: "Driver assigned successfully",
-//             booking: {
-//                 _id: booking._id,
-//                 trackingId: booking.trackingId,
-//                 assignedDriverId: booking.assignedDriverId,
-//                 truckId: booking.truckId,
-//                 status: booking.status,
-//                 from: booking.from,
-//                 to: booking.to,
-//                 scheduledDate: booking.scheduledDate
+//         try {
+//             // Find and validate booking
+//             const booking = await TruckBooking.findById(bookingId).session(session);
+//             if (!booking) {
+//                 await session.abortTransaction();
+//                 session.endSession();
+//                 return res.status(404).json({
+//                     success: false,
+//                     message: "Booking not found"
+//                 });
 //             }
-//         });
+
+//             if (booking.status !== 'pending') {
+//                 await session.abortTransaction();
+//                 session.endSession();
+//                 return res.status(400).json({
+//                     success: false,
+//                     message: "Only pending bookings can be assigned"
+//                 });
+//             }
+
+//             // Find and validate truck
+//             const truck = await TruckRegistration.findOne({
+//                 _id: truckId,
+//                 userId: driverId,
+//                 status: 'approved'
+//             }).session(session);
+
+//             if (!truck) {
+//                 await session.abortTransaction();
+//                 session.endSession();
+//                 return res.status(400).json({
+//                     success: false,
+//                     message: "Truck not found or not approved"
+//                 });
+//             }
+
+//             // Check if truck is already assigned to another active booking
+//             const existingAssignment = await TruckBooking.findOne({
+//                 truckId: truckId,
+//                 status: { $in: ['assigned', 'in-progress'] }
+//             }).session(session);
+
+//             if (existingAssignment) {
+//                 await session.abortTransaction();
+//                 session.endSession();
+//                 return res.status(400).json({
+//                     success: false,
+//                     message: "Truck is already assigned to another active booking"
+//                 });
+//             }
+
+//             // Update booking
+//             booking.truckId = truckId;
+//             booking.assignedDriverId = driverId;
+//             booking.status = 'assigned';
+//             booking.approvedBy = req.admin.adminId;
+//             booking.approvalDate = new Date();
+//             await booking.save({ session });
+
+//             // Update truck status
+//             truck.isAvailable = false;
+//             truck.bookingStatus = 'assigned';
+//             await truck.save({ session });
+
+//             // Commit transaction
+//             await session.commitTransaction();
+//             session.endSession();
+
+//             // Get updated booking with populated fields
+//             const updatedBooking = await TruckBooking.findById(bookingId)
+//                 .populate('assignedDriverId', 'fullName phone email')
+//                 .populate('truckId');
+
+//             res.status(200).json({
+//                 success: true,
+//                 message: "Driver and truck assigned successfully",
+//                 booking: updatedBooking
+//             });
+
+//         } catch (error) {
+//             await session.abortTransaction();
+//             session.endSession();
+//             throw error;
+//         }
 
 //     } catch (error) {
 //         console.error("Error assigning driver:", error);
@@ -469,117 +469,6 @@ exports.getMatchingDriversForBooking = async (req, res) => {
 //     }
 // };
 
-exports.assignDriverToBooking = async (req, res) => {
-    try {
-        const { bookingId, driverId, truckId } = req.body;
-
-        // Validate input
-        if (!bookingId || !driverId || !truckId) {
-            return res.status(400).json({
-                success: false,
-                message: "Booking ID, Driver ID and Truck ID are required"
-            });
-        }
-
-        // Start a session for transaction
-        const session = await mongoose.startSession();
-        session.startTransaction();
-
-        try {
-            // Find and validate booking
-            const booking = await TruckBooking.findById(bookingId).session(session);
-            if (!booking) {
-                await session.abortTransaction();
-                session.endSession();
-                return res.status(404).json({
-                    success: false,
-                    message: "Booking not found"
-                });
-            }
-
-            if (booking.status !== 'pending') {
-                await session.abortTransaction();
-                session.endSession();
-                return res.status(400).json({
-                    success: false,
-                    message: "Only pending bookings can be assigned"
-                });
-            }
-
-            // Find and validate truck
-            const truck = await TruckRegistration.findOne({
-                _id: truckId,
-                userId: driverId,
-                status: 'approved'
-            }).session(session);
-
-            if (!truck) {
-                await session.abortTransaction();
-                session.endSession();
-                return res.status(400).json({
-                    success: false,
-                    message: "Truck not found or not approved"
-                });
-            }
-
-            // Check if truck is already assigned to another active booking
-            const existingAssignment = await TruckBooking.findOne({
-                truckId: truckId,
-                status: { $in: ['assigned', 'in-progress'] }
-            }).session(session);
-
-            if (existingAssignment) {
-                await session.abortTransaction();
-                session.endSession();
-                return res.status(400).json({
-                    success: false,
-                    message: "Truck is already assigned to another active booking"
-                });
-            }
-
-            // Update booking
-            booking.truckId = truckId;
-            booking.assignedDriverId = driverId;
-            booking.status = 'assigned';
-            booking.approvedBy = req.admin.adminId;
-            booking.approvalDate = new Date();
-            await booking.save({ session });
-
-            // Update truck status
-            truck.isAvailable = false;
-            truck.bookingStatus = 'assigned';
-            await truck.save({ session });
-
-            // Commit transaction
-            await session.commitTransaction();
-            session.endSession();
-
-            // Get updated booking with populated fields
-            const updatedBooking = await TruckBooking.findById(bookingId)
-                .populate('assignedDriverId', 'fullName phone email')
-                .populate('truckId');
-
-            res.status(200).json({
-                success: true,
-                message: "Driver and truck assigned successfully",
-                booking: updatedBooking
-            });
-
-        } catch (error) {
-            await session.abortTransaction();
-            session.endSession();
-            throw error;
-        }
-
-    } catch (error) {
-        console.error("Error assigning driver:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to assign driver",
-            error: error.message
-        });
-    }
-};
 exports.getApprovedTrucks = async (req, res) => {
     try {
         // Get all approved trucks
@@ -699,7 +588,6 @@ exports.suspendDriver = async (req, res) => {
         });
     }
 };
-
 exports.getAllsuspendedDriver = async (req, res) => {
     try {
         const suspendedDrivers = await User.find({
@@ -730,7 +618,6 @@ exports.getAllsuspendedDriver = async (req, res) => {
         });
     }
 };
-
 exports.restoresuspendedDriver = async (req, res) => {
     try {
         const driverId = req.params.driverId;
@@ -777,3 +664,330 @@ exports.restoresuspendedDriver = async (req, res) => {
     }
 };
 
+exports.assignDriverToBooking = async (req, res) => {
+    try {
+        const { bookingId, driverId, truckId } = req.body;
+
+        // Start transaction
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            // 1. Verify the user is actually a driver
+            const driver = await User.findOne({
+                _id: driverId,
+                role: 'driver'
+            }).session(session);
+
+            if (!driver) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: "The specified user is not a registered driver"
+                });
+            }
+
+            // 2. Find and validate booking
+            const booking = await TruckBooking.findById(bookingId)
+                .session(session)
+                .populate('userId', 'fullName phone');
+
+            if (!booking) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(404).json({
+                    success: false,
+                    message: "Booking not found"
+                });
+            }
+
+            // 3. Find and validate truck belongs to this driver
+            const truck = await TruckRegistration.findOne({
+                _id: truckId,
+                userId: driverId,  // Ensure truck belongs to this driver
+                status: 'approved'
+            }).session(session);
+
+            if (!truck) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: "Truck not found, not approved, or doesn't belong to this driver"
+                });
+            }
+
+            // 4. Check if truck is already assigned
+            const existingAssignment = await TruckBooking.findOne({
+                truckId: truckId,
+                status: { $in: ['assigned', 'in-progress'] }
+            }).session(session);
+
+            if (existingAssignment) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: "This truck is already assigned to another active booking"
+                });
+            }
+
+            // 5. Update records
+            booking.assignedDriverId = driverId;
+            booking.truckId = truckId;
+            booking.status = 'assigned';
+            booking.assignedAt = new Date();
+            booking.approvedBy = req.admin.adminId;
+            
+            truck.isAvailable = false;
+            truck.bookingStatus = 'assigned';
+
+            await Promise.all([
+                booking.save({ session }),
+                truck.save({ session })
+            ]);
+
+            await session.commitTransaction();
+            session.endSession();
+
+            // 6. Get fully populated response
+            const updatedBooking = await TruckBooking.findById(bookingId)
+                .populate('userId', 'fullName phone email')
+                .populate('assignedDriverId', 'fullName phone')
+                .populate('truckId');
+
+            res.status(200).json({
+                success: true,
+                message: "Driver and truck assigned successfully",
+                booking: updatedBooking
+            });
+
+        } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
+            throw error;
+        }
+
+    } catch (error) {
+        console.error("Error assigning driver:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to assign driver",
+            error: error.message
+        });
+    }
+};
+
+////////////////////////
+// Get all orders (assigned, in-progress, completed)
+exports.getAllOrders = async (req, res) => {
+    try {
+        const orders = await TruckBooking.find({
+            status: { $in: ['assigned', 'in-progress', 'completed'] }
+        })
+        .populate({
+            path: 'userId',
+            select: 'fullName phone email',
+            options: { retainNullValues: false } // This ensures null values are removed
+        })
+        .populate({
+            path: 'assignedDriverId',
+            select: 'fullName phone',
+            options: { retainNullValues: false }
+        })
+        .populate('truckId')
+        .select('-statusHistory') // Explicitly exclude statusHistory
+        .sort({ createdAt: -1 });
+
+        // Transform the data to ensure consistent response structure
+        const transformedOrders = orders.map(order => ({
+            ...order.toObject(),
+            // Ensure these fields are never null in response
+            userId: order.userId || undefined,
+            assignedDriverId: order.assignedDriverId || undefined
+        }));
+
+        res.status(200).json({
+            success: true,
+            count: transformedOrders.length,
+            orders: transformedOrders
+        });
+    } catch (error) {
+        console.error("Error fetching all orders:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch orders",
+            error: error.message
+        });
+    }
+};
+// Get all cancelled orders
+exports.getCancelledOrders = async (req, res) => {
+    try {
+        const orders = await TruckBooking.find({ status: 'cancelled' })
+            .populate('userId', 'fullName phone email')
+            .populate('assignedDriverId', 'fullName phone')
+            .populate('truckId')
+            .sort({ updatedAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: orders.length,
+            orders
+        });
+    } catch (error) {
+        console.error("Error fetching cancelled orders:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch cancelled orders",
+            error: error.message
+        });
+    }
+};
+// Cancel booking (admin only)
+exports.cancelBooking = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        const { reason } = req.body;
+
+        if (!reason) {
+            return res.status(400).json({
+                success: false,
+                message: "Cancellation reason is required"
+            });
+        }
+
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            const booking = await TruckBooking.findById(bookingId).session(session)
+                .populate('truckId');
+
+            if (!booking) {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(404).json({
+                    success: false,
+                    message: "Booking not found"
+                });
+            }
+
+            // Check if booking can be cancelled
+            if (booking.status === 'completed') {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: "Completed bookings cannot be cancelled"
+                });
+            }
+
+            if (booking.status === 'cancelled') {
+                await session.abortTransaction();
+                session.endSession();
+                return res.status(400).json({
+                    success: false,
+                    message: "Booking is already cancelled"
+                });
+            }
+
+            // Update booking
+            booking.status = 'cancelled';
+            booking.cancellationReason = reason;
+            booking.cancelledAt = new Date();
+            booking.cancelledBy = req.admin.adminId;
+            
+            // Initialize statusHistory if it doesn't exist
+            if (!booking.statusHistory) {
+                booking.statusHistory = [];
+            }
+            
+            // Add status change record
+            booking.statusHistory.push({
+                status: 'cancelled',
+                changedAt: new Date(),
+                changedBy: req.admin.adminId,
+                notes: `Cancelled by admin. Reason: ${reason}`
+            });
+
+            // Free up truck if assigned
+            if (booking.truckId) {
+                booking.truckId.isAvailable = true;
+                await booking.truckId.save({ session });
+            }
+
+            await booking.save({ session });
+            await session.commitTransaction();
+            session.endSession();
+
+            res.status(200).json({
+                success: true,
+                message: "Booking cancelled successfully",
+                booking: {
+                    _id: booking._id,
+                    trackingId: booking.trackingId,
+                    status: booking.status,
+                    from: booking.from,
+                    to: booking.to,
+                    cancelledAt: booking.cancelledAt,
+                    cancellationReason: booking.cancellationReason
+                    // Include other fields you need in the response
+                }
+            });
+
+        } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
+            console.error("Error in cancelBooking transaction:", error);
+            throw error;
+        }
+
+    } catch (error) {
+        console.error("Error cancelling booking:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to cancel booking",
+            error: error.message
+        });
+    }
+};
+
+// Get booking timeline
+// exports.getBookingTimeline = async (req, res) => {
+//     try {
+//         const { bookingId } = req.params;
+
+//         const booking = await TruckBooking.findById(bookingId)
+//             .populate('statusHistory.changedBy', 'fullName role')
+//             .select('statusHistory trackingId');
+
+//         if (!booking) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "Booking not found"
+//             });
+//         }
+
+//         // Authorization check
+//         if (req.user.role !== 'admin' && booking.userId.toString() !== req.user.userId) {
+//             return res.status(403).json({
+//                 success: false,
+//                 message: "Unauthorized to view this booking"
+//             });
+//         }
+
+//         res.status(200).json({
+//             success: true,
+//             trackingId: booking.trackingId,
+//             timeline: booking.statusHistory
+//         });
+//     } catch (error) {
+//         res.status(500).json({
+//             success: false,
+//             message: "Failed to get booking timeline",
+//             error: error.message
+//         });
+//     }
+// };

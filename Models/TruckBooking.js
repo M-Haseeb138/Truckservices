@@ -146,6 +146,11 @@ const truckBookingSchema = new mongoose.Schema({
   type: mongoose.Schema.Types.ObjectId,
   ref: "TruckRegistration"
 },
+  assignedAt: Date,
+  startedAt: Date,
+  completedAt: Date,
+  cancelledAt: Date,
+  cancellationReason: String,
 
 }, { timestamps: true });
 
