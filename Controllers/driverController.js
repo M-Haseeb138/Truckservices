@@ -7,15 +7,33 @@ exports.getMyTrucks = async (req, res) => {
         console.log("Current user ID:", req.user.userId); // ✅ Use userId
         console.log("User ID type:", typeof req.user.userId);
 
-        const trucks = await TruckRegistration.find({ userId: req.user.userId });  // ✅ Correct field
+        const trucks = await TruckRegistration.find({ userId: req.user.userId })
+        .sort({ createdAt: -1 })
+            .select('-__v')
         console.log("Found trucks:", trucks);
 
-        res.status(200).json({ success: true, data: trucks });
+            if (!trucks || trucks.length === 0) {
+            return res.status(200).json({ 
+                success: true, 
+                message: "No trucks registered yet",
+                data: [] 
+            });
+        }
+
+         res.status(200).json({
+            success: true,
+            count: trucks.length,
+            data: trucks
+        });
     } catch (error) {
-        console.error("Error fetching trucks:", error);
-        res.status(500).json({ success: false, message: "Server Error", error: error.message });
-    }
+      console.error(`Error fetching trucks for user ${req.user.userId}:`, error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch trucks",
+            error: error.message
+    })
 };
+}
 // Get all assigned and in-progress jobs for driver
 exports.getDriverAssignments = async (req, res) => {
     try {

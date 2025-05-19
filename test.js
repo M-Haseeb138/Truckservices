@@ -1,84 +1,68 @@
-exports.assignDriverToBooking = async (req, res) => {
+exports.getMyBookingsByStatus = async (req, res) => {
     try {
-        const { bookingId, driverId, truckId } = req.body;
-
-        // Start transaction
-        const session = await mongoose.startSession();
-        session.startTransaction();
-
-        try {
-            // Find and validate booking
-            const booking = await TruckBooking.findById(bookingId)
-                .session(session)
-                .populate('userId', 'fullName phone');
-
-            if (!booking) {
-                await session.abortTransaction();
-                session.endSession();
-                return res.status(404).json({
-                    success: false,
-                    message: "Booking not found"
-                });
-            }
-
-            // Find and validate truck and driver
-            const truck = await TruckRegistration.findOne({
-                _id: truckId,
-                userId: driverId,
-                status: 'approved'
-            }).session(session);
-
-            if (!truck) {
-                await session.abortTransaction();
-                session.endSession();
-                return res.status(400).json({
-                    success: false,
-                    message: "Truck not found or not approved"
-                });
-            }
-
-            // Update booking
-            booking.assignedDriverId = driverId;
-            booking.truckId = truckId;
-            booking.status = 'assigned';
-            booking.assignedAt = new Date();
-            booking.approvedBy = req.admin.adminId;
-            
-            // Update truck status
-            truck.isAvailable = false;
-            truck.bookingStatus = 'assigned';
-
-            await Promise.all([
-                booking.save({ session }),
-                truck.save({ session })
-            ]);
-
-            await session.commitTransaction();
-            session.endSession();
-
-            // Get fully populated booking for response
-            const updatedBooking = await TruckBooking.findById(bookingId)
-                .populate('userId', 'fullName phone email')
-                .populate('assignedDriverId', 'fullName phone')
-                .populate('truckId');
-
-            res.status(200).json({
-                success: true,
-                message: "Driver and truck assigned successfully",
-                booking: updatedBooking
+        const { status } = req.params;
+        
+        // Validate status
+        const validStatuses = ['pending', 'assigned', 'in-progress', 'completed', 'cancelled'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid status value"
             });
-
-        } catch (error) {
-            await session.abortTransaction();
-            session.endSession();
-            throw error;
         }
 
+        const bookings = await TruckBooking.find({ 
+            userId: req.user.userId,
+            status: status 
+        })
+        .sort({ createdAt: -1 })
+        .populate('assignedDriverId', 'fullName phone email')
+        .populate('truckId', 'truckDetails.VehicleNo truckDetails.typeOfTruck');
+
+        res.status(200).json({
+            success: true,
+            count: bookings.length,
+            data: bookings
+        });
     } catch (error) {
-        console.error("Error assigning driver:", error);
+        console.error(`Error fetching ${status} bookings:`, error);
         res.status(500).json({
             success: false,
-            message: "Failed to assign driver",
+            message: "Failed to get bookings",
+            error: error.message
+        });
+    }
+};
+
+exports.getMyTrucksByStatus = async (req, res) => {
+    try {
+        const { status } = req.params;
+        
+        // Validate status
+        const validStatuses = ['pending', 'approved', 'rejected'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid status value"
+            });
+        }
+
+        const trucks = await TruckRegistration.find({ 
+            userId: req.user.userId,
+            status: status 
+        })
+        .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            success: true,
+            count: trucks.length,
+            data: trucks
+        });
+    } catch (error) {
+        console.error(`Error fetching ${status} trucks:`, error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to get trucks",
             error: error.message
         });
     }

@@ -82,32 +82,92 @@ exports.bookTruck = async (req, res) => {
         });
     }
 };
-exports.getMyBookings = async(req,res)=>{
-
+exports.getMyBookings = async (req, res) => {
     try {
-        const bookings = await TruckBooking.find({userId:req.user.userId})
-        .sort({createdAt : -1})
-        .populate('assignedDriverId', 'fullName phone');
+        // Fetch bookings with populated driver and truck details
+        const bookings = await TruckBooking.find({ userId: req.user.userId })
+            .sort({ createdAt: -1 }) // Sort by newest first
+            .populate({
+                path: 'assignedDriverId',
+                select: 'fullName phone email',
+                options: { retainNullValues: true } // Keep null if not assigned
+            })
+            .populate({
+                path: 'truckId',
+                select: 'truckDetails.VehicleNo truckDetails.typeOfTruck status',
+                options: { retainNullValues: true } // Keep null if not assigned
+            });
+
+        // Handle empty results gracefully
+        if (!bookings || bookings.length === 0) {
+            return res.status(200).json({ 
+                success: true, 
+                message: "No bookings found for this user",
+                count: 0,
+                data: [] 
+            });
+        }
+
+        // Format response with additional metadata
         res.status(200).json({
-            sucess:true,
-            data : bookings
+            success: true,
+            message: "Bookings retrieved successfully",
+            count: bookings.length,
+            data: bookings.map(booking => ({
+                _id: booking._id,
+                trackingId: booking.trackingId,
+                from: booking.from,
+                to: booking.to,
+                scheduledDate: booking.scheduledDate,
+                status: booking.status,
+                customerName: booking.customerName,
+                customerPhone: booking.customerPhone,
+                materials: booking.materials,
+                weight: booking.weight,
+                truckTypes: booking.truckTypes,
+                noOfTrucks: booking.noOfTrucks,
+                assignedDriver: booking.assignedDriverId || null,
+                assignedTruck: booking.truckId || null,
+                createdAt: booking.createdAt,
+                updatedAt: booking.updatedAt
+            }))
         });
+
     } catch (error) {
+        // Enhanced error logging with user context
+        console.error(`[${new Date().toISOString()}] Error fetching bookings for user ${req.user.userId}:`, {
+            error: error.message,
+            stack: error.stack
+        });
+
+        // Consistent error response format
         res.status(500).json({
-            sucess:false,
-            message:"Failed to get bookings",
-            error:error.message
-        })
+            success: false,
+            message: "An error occurred while fetching bookings",
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+            timestamp: new Date().toISOString()
+        });
     }
-}
+};
 // Get booking by tracking ID (for customers and admins)
 exports.getBookingByTrackingId = async (req, res) => {
     try {
         const { trackingId } = req.params;
 
+        // console.log("Booking request for tracking ID:", trackingId);
+        // console.log("Logged-in user ID:", req.user.userId);
+
+        if (!trackingId || trackingId.length !== 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid tracking ID format"
+            });
+        }
+
         const booking = await TruckBooking.findOne({ trackingId })
-            .populate('userId', 'fullName phone')
-            .populate('assignedDriverId', 'fullName phone');
+            .populate('userId', 'fullName phone email')
+            .populate('assignedDriverId', 'fullName phone email')
+            .populate('truckId', 'truckDetails.VehicleNo truckDetails.typeOfTruck');
 
         if (!booking) {
             return res.status(404).json({
@@ -116,19 +176,24 @@ exports.getBookingByTrackingId = async (req, res) => {
             });
         }
 
+        // console.log("Booking's user ID:", booking.userId._id.toString());
+        // console.log("Booking user info:", booking.userId);
+
         // Authorization check
-        if (req.user.role !== 'admin' && booking.userId.toString() !== req.user.userId) {
-            return res.status(403).json({
-                success: false,
-                message: "Unauthorized to view this booking"
-            });
-        }
+     if (req.user.role !== 'admin' && booking.userId._id.toString() !== req.user.userId.toString()) {
+    return res.status(403).json({
+        success: false,
+        message: "Unauthorized to view this booking"
+    });
+}
 
         res.status(200).json({
             success: true,
-            booking
+            data: booking
         });
+
     } catch (error) {
+        console.error(`Error fetching booking ${req.params.trackingId}:`, error);
         res.status(500).json({
             success: false,
             message: "Failed to get booking",
@@ -136,6 +201,7 @@ exports.getBookingByTrackingId = async (req, res) => {
         });
     }
 };
+
 exports.cancelPendingBooking = async (req, res) => {
     try {
         const { bookingId } = req.params;
