@@ -144,7 +144,6 @@ exports.updateAssignmentStatus = async (req, res) => {
 };
 exports.registerTruck = async (req, res) => {
     try {
-     
         const user = await User.findById(req.user.userId);
         if (!user) {
             return res.status(404).json({
@@ -153,7 +152,7 @@ exports.registerTruck = async (req, res) => {
             });
         }
 
-        // 3. Validate required files
+        // Validate required files
         const requiredFiles = [
             'idCardFrontImage',
             'idCardBackImage',
@@ -173,12 +172,12 @@ exports.registerTruck = async (req, res) => {
             });
         }
 
-        // 4. Driver details (truckDriverName and driver mobile always from user)
+        // Driver details
         const driverDetails = {
-            truckDriverName: user.fullName,  // Always from user
-            mobileNo: user.phone,            // Always from user
-            email: user.email,               // Always from user
-            CNIC: user.CNIC,                 // Always from user
+            truckDriverName: user.fullName,
+            mobileNo: user.phone,
+            email: user.email,
+            CNIC: user.CNIC,
             dateOfBirth: req.body.driverDateOfBirth,
             province: req.body.driverProvince,
             address: req.body.driverAddress,
@@ -187,7 +186,7 @@ exports.registerTruck = async (req, res) => {
             lisenceNo: req.body.lisenceNo || ''
         };
 
-        // 5. Owner details (entered manually)
+        // Owner details
         const ownerDetails = {
             truckOwnerName: req.body.truckOwnerName,
             mobileNo: req.body.ownerMobileNo,
@@ -197,7 +196,7 @@ exports.registerTruck = async (req, res) => {
             country: req.body.ownerCountry
         };
 
-        // 6. Validate mandatory driver fields
+        // Validate mandatory driver fields
         if (!driverDetails.dateOfBirth || !driverDetails.province || !driverDetails.address || !driverDetails.country) {
             return res.status(400).json({
                 success: false,
@@ -205,15 +204,16 @@ exports.registerTruck = async (req, res) => {
             });
         }
 
-        // 7. Validate mandatory owner fields
-        if (!ownerDetails.truckOwnerName || !ownerDetails.mobileNo || !ownerDetails.dateOfBirth || !ownerDetails.province || !ownerDetails.address || !ownerDetails.country) {
+        // Validate mandatory owner fields
+        if (!ownerDetails.truckOwnerName || !ownerDetails.mobileNo || !ownerDetails.dateOfBirth || 
+            !ownerDetails.province || !ownerDetails.address || !ownerDetails.country) {
             return res.status(400).json({
                 success: false,
                 message: "Owner name, mobile, DOB, province, address, and country are required"
             });
         }
 
-        // 8. Build Truck object
+        // Build Truck object with all image paths
         const newTruck = new TruckRegistration({
             ownerDetails,
             driverDetails,
@@ -232,10 +232,10 @@ exports.registerTruck = async (req, res) => {
             status: 'pending'
         });
 
-        // 9. Save to database
+        // Save to database
         const savedTruck = await newTruck.save();
 
-        // 10. Return success response
+        // Return success response with all image URLs included in truckDetails
         res.status(201).json({
             success: true,
             message: "Truck registration submitted for approval",
@@ -243,7 +243,13 @@ exports.registerTruck = async (req, res) => {
                 _id: savedTruck._id,
                 ownerDetails: savedTruck.ownerDetails,
                 driverDetails: savedTruck.driverDetails,
-                truckDetails: savedTruck.truckDetails,
+                truckDetails: {
+                    ...savedTruck.truckDetails.toObject(),
+                    idCardFrontImage: savedTruck.idCardFrontImage,
+                    idCardBackImage: savedTruck.idCardBackImage,
+                    licenseFrontImage: savedTruck.licenseFrontImage,
+                    TruckPicture: savedTruck.TruckPicture
+                },
                 status: savedTruck.status,
                 createdAt: savedTruck.createdAt
             }
