@@ -158,7 +158,7 @@ exports.registerTruck = async (req, res) => {
             'idCardFrontImage',
             'idCardBackImage',
             'licenseFrontImage',
-            'profilePicture',
+            'TruckPicture',
             'Truckdocument'
         ];
 
@@ -220,7 +220,7 @@ exports.registerTruck = async (req, res) => {
             idCardFrontImage: req.files.idCardFrontImage[0].path,
             idCardBackImage: req.files.idCardBackImage[0].path,
             licenseFrontImage: req.files.licenseFrontImage[0].path,
-            profilePicture: req.files.profilePicture[0].path,
+            TruckPicture: req.files.TruckPicture[0].path,
             truckDetails: {
                 typeOfTruck: req.body.typeOfTruck,
                 weight: req.body.weight,

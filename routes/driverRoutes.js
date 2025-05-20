@@ -13,7 +13,7 @@ router.post("/trucks/register",
         { name: 'idCardFrontImage', maxCount: 1 },
         { name: 'idCardBackImage', maxCount: 1 },
         { name: 'licenseFrontImage', maxCount: 1 },
-        { name: 'profilePicture', maxCount: 1 },
+        { name: 'TruckPicture', maxCount: 1 },
         { name: 'Truckdocument', maxCount: 1 }
     ]), 
     driverController.registerTruck

@@ -22,7 +22,7 @@ const truckSchema = new mongoose.Schema({
     idCardFrontImage: { type: String, required: true },
     idCardBackImage: { type: String, required: true },
     licenseFrontImage: { type: String, required: true },
-    profilePicture: { type: String, required: true },
+    TruckPicture: { type: String, required: true },
     truckDetails: {
         typeOfTruck: { type: String, required: true },
         weight: { type: String, required: true },

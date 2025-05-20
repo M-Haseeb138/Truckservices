@@ -178,7 +178,7 @@ exports.getApprovedDrivers = async (req, res) => {
                 idCardFrontImage: truck.idCardFrontImage,
                 idCardBackImage: truck.idCardBackImage,
                 licenseFrontImage: truck.licenseFrontImage,
-                profilePicture: truck.profilePicture,
+                TruckPicture: truck.TruckPicture,
                 Truckdocument: truck.truckDetails.Truckdocument,
                 registrationDate: truck.createdAt,
                 status: truck.status
