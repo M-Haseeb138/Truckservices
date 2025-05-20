@@ -258,7 +258,6 @@ exports.getAllAdmins = async (req, res) => {
       res.status(500).json({ success: false, message: "Server Error" });
     }
   };
-
   exports.updateAdmin = async (req, res) => {
     try {
         const { adminId } = req.params;
@@ -306,9 +305,6 @@ exports.getAllAdmins = async (req, res) => {
         res.status(500).json({ success: false, message: "Server Error" });
     }
 };
-
-
-
   exports.logout = async (req, res) => {
     try {
         res.cookie("token", "", {

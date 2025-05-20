@@ -149,7 +149,6 @@ exports.getMyBookings = async (req, res) => {
         });
     }
 };
-// Get booking by tracking ID (for customers and admins)
 exports.getBookingByTrackingId = async (req, res) => {
     try {
         const { trackingId } = req.params;
@@ -201,7 +200,6 @@ exports.getBookingByTrackingId = async (req, res) => {
         });
     }
 };
-
 exports.cancelPendingBooking = async (req, res) => {
     try {
         const { bookingId } = req.params;

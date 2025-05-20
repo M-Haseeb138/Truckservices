@@ -142,7 +142,6 @@ exports.updateAssignmentStatus = async (req, res) => {
         });
     }
 };
-
 exports.registerTruck = async (req, res) => {
     try {
      
@@ -268,9 +267,6 @@ exports.registerTruck = async (req, res) => {
         });
     }
 };
-
-///////////
-
 // Complete a booking
 exports.completeBooking = async (req, res) => {
     try {
