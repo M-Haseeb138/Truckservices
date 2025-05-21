@@ -359,18 +359,12 @@ exports.getMatchingDriversForBooking = async (req, res) => {
 };
 exports.getApprovedTrucks = async (req, res) => {
     try {
-        // Get all approved trucks
-        const approvedTrucks = await TruckRegistration.find({ status: 'approved' })
-            .populate('userId', 'fullName phone email')
-            .lean();
-
-        // Get all active bookings with truckIds
+        // First get active bookings to build status map
         const activeBookings = await TruckBooking.find({
             status: { $in: ['assigned', 'in-progress'] },
             truckId: { $ne: null }
         }).select('truckId status');
 
-        // Create a map of truckIds to their booking status
         const truckStatusMap = new Map();
         activeBookings.forEach(booking => {
             if (booking.truckId) {
@@ -378,11 +372,23 @@ exports.getApprovedTrucks = async (req, res) => {
             }
         });
 
-        // Process each truck to determine current status
+        // Get approved trucks with explicit field selection
+        const approvedTrucks = await TruckRegistration.find({ status: 'approved' })
+            .populate('userId', 'fullName phone email')
+            .select('+TruckPicture') // Ensure TruckPicture is included
+            .lean();
+
+        // Process trucks with proper image handling
         const trucksWithStatus = approvedTrucks.map(truck => {
             const isAssigned = truckStatusMap.has(truck._id.toString());
+            
             return {
                 ...truck,
+                // Set default image if none exists
+                TruckPicture: truck.TruckPicture || 'https://example.com/default-truck.jpg',
+                // Remove any old field if present
+                ...(truck.profilePicture && { profilePicture: undefined }),
+                
                 isAvailable: !isAssigned,
                 bookingStatus: isAssigned ? 'assigned' : 'available',
                 currentAssignment: isAssigned ? {
@@ -396,7 +402,6 @@ exports.getApprovedTrucks = async (req, res) => {
             count: trucksWithStatus.length,
             trucks: trucksWithStatus
         });
-
     } catch (error) {
         console.error("Error fetching approved trucks:", error);
         res.status(500).json({
@@ -406,6 +411,7 @@ exports.getApprovedTrucks = async (req, res) => {
         });
     }
 };
+
 exports.getAllDrivers = async (req, res) => {
     try {
         const drivers = await User.find({
