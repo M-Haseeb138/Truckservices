@@ -8,14 +8,14 @@ class RateService {
 
   static async calculateSimpleRate(truckType, distance, noOfTrucks = 1) {
     const rateConfig = await this.getRateConfig(truckType);
-    
+
     if (!rateConfig) {
       throw new Error(`No rate configuration found for truck type: ${truckType}`);
     }
 
     // Calculate base rate
     let baseRate = distance * rateConfig.baseRatePerKm * noOfTrucks;
-    
+
     // Apply minimum charge
     if (baseRate < rateConfig.minimumCharge * noOfTrucks) {
       baseRate = rateConfig.minimumCharge * noOfTrucks;

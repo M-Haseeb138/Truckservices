@@ -6,102 +6,7 @@ const { generateUniqueTrackingId } = require('../utils/trackingGenerator');
 const LocationService = require('../services/locationService');
 const RATE_PER_KM = process.env.RATE_PER_KM || 1.5;
 const RateService = require('../services/rateService');
-///////
 
-
-// exports.bookTruck = async (req, res) => {
-//     try {
-//         const {
-//             from,
-//             to,
-//             materials,
-//             weight,
-//             truckTypes,
-//             noOfTrucks,
-//             scheduledDate
-//         } = req.body;
-
-//         // Geocode addresses
-//         const [fromLocation, toLocation] = await Promise.all([
-//             geocodeAddress(from, process.env.GOOGLE_MAPS_API_KEY),
-//             geocodeAddress(to, process.env.GOOGLE_MAPS_API_KEY)
-//         ]);
-
-//         // Calculate distance
-//         const { distance } = await calculateDistance(
-//             { lat: fromLocation.lat, lng: fromLocation.lng },
-//             { lat: toLocation.lat, lng: toLocation.lng },
-//             process.env.GOOGLE_MAPS_API_KEY
-//         );
-
-//         // Calculate rate (example: $1 per km)
-//         const ratePerKm = 1; // This should be configurable
-//         const rate = distance * ratePerKm * noOfTrucks;
-
-//         // Generate unique tracking ID
-//         const trackingId = await generateUniqueTrackingId();
-
-//         // Create booking
-//         const newBooking = new TruckBooking({
-//             userId: req.user.userId,
-//             trackingId,
-//             from,
-//             to,
-//             fromCoordinates: {
-//                 lat: fromLocation.lat,
-//                 lng: fromLocation.lng
-//             },
-//             toCoordinates: {
-//                 lat: toLocation.lat,
-//                 lng: toLocation.lng
-//             },
-//             distance,
-//             rate,
-//             materials,
-//             weight,
-//             truckTypes,
-//             noOfTrucks,
-//             scheduledDate,
-//             customerName: customer.fullName,
-//             customerPhone: customer.phone,
-//             status: 'pending'
-//         });
-
-//         await newBooking.save();
-
-
-//         res.status(201).json({ 
-//             success: true, 
-//             message: "Truck booking request submitted successfully", 
-//             booking: {
-//                 _id: newBooking._id,
-//                 trackingId: newBooking.trackingId,
-//                 from: newBooking.from,
-//                 to: newBooking.to,
-//                 scheduledDate: newBooking.scheduledDate,
-//                 status: newBooking.status,
-//                 customerName: newBooking.customerName,
-//                 customerPhone: newBooking.customerPhone,
-//                 materials:newBooking.materials,
-//                 weight:newBooking.weight,
-//                 truckTypes:newBooking.truckTypes,
-//                 noOfTrucks:newBooking.noOfTrucks,
-//                  distance,
-//                 rate,
-//                 fromCoordinates: newBooking.fromCoordinates,
-//                 toCoordinates: newBooking.toCoordinates
-//             }
-//         });
-
-//     } catch (error) {
-//         console.error("Booking error:", error);
-//         res.status(500).json({ 
-//             success: false, 
-//             message: "Booking failed",
-//             error: error.message 
-//         });
-//     }
-// };
 
 exports.createBooking = async (req, res) => {
   try {
@@ -203,7 +108,6 @@ exports.createBooking = async (req, res) => {
     });
   }
 };
-
 exports.getMyBookings = async (req, res) => {
     try {
         // Fetch bookings with populated driver and truck details
@@ -445,7 +349,6 @@ exports.getRateEstimate = async (req, res) => {
     });
   }
 };
-
 exports.getPlaceSuggestions = async (req, res) => {
   try {
     const { input } = req.query;
@@ -470,7 +373,6 @@ exports.getPlaceSuggestions = async (req, res) => {
     });
   }
 };
-
 exports.calculateCompleteRate = async (req, res) => {
   try {
     const { from, to, truckType, noOfTrucks } = req.body;

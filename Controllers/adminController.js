@@ -138,22 +138,34 @@ exports.getRejectedTrucks = async (req, res) => {
 };
 exports.getApprovedDrivers = async (req, res) => {
     try {
-
         // 1. Find all drivers with assigned bookings
         const assignedDriverIds = await TruckBooking.distinct('assignedDriverId', {
             status: { $in: ['assigned', 'in-progress'] }
         });
 
         // 2. Find all approved trucks, along with user details, excluding assigned drivers
+        // Also filter out trucks with no userId
         const approvedTrucks = await TruckRegistration.find({
             status: 'approved',
-            userId: { $nin: assignedDriverIds }
-        }).populate('userId', 'fullName phone email CNIC role');
+            isAvailable: true,  // Only available trucks
+            userId: { 
+                $nin: assignedDriverIds,
+                $exists: true,
+                $ne: null 
+            }
+        }).populate({
+            path: 'userId',
+            select: 'fullName phone email CNIC role',
+            match: { role: 'driver' }  // Only populate if user is a driver
+        });
 
-        // 2. Create a map to group trucks by driver
+        // 3. Filter out trucks where userId is null after population
+        const validTrucks = approvedTrucks.filter(truck => truck.userId !== null);
+
+        // 4. Create a map to group trucks by driver
         const driverMap = new Map();
 
-        approvedTrucks.forEach(truck => {
+        validTrucks.forEach(truck => {
             const driverId = truck.userId._id.toString();
 
             // Initialize driver if not already added
@@ -185,7 +197,7 @@ exports.getApprovedDrivers = async (req, res) => {
             });
         });
 
-        // 3. Convert map values to array
+        // 5. Convert map values to array
         const drivers = Array.from(driverMap.values());
 
         res.status(200).json({
@@ -230,7 +242,6 @@ exports.getMatchingDriversForBooking = async (req, res) => {
         const { bookingId } = req.params;
         console.log(`[MatchingDrivers] Starting search for booking: ${bookingId}`);
 
-        // 1. Get the booking details
         const booking = await TruckBooking.findById(bookingId);
         if (!booking) {
             console.log(`[MatchingDrivers] Booking not found: ${bookingId}`);
@@ -246,7 +257,7 @@ exports.getMatchingDriversForBooking = async (req, res) => {
             materials: booking.materials
         });
 
-        // Weight normalization function
+       
         const normalizeWeight = (weight) => {
             if (!weight) return '';
             return weight.toString().toLowerCase()
@@ -455,7 +466,6 @@ exports.getApprovedTrucks = async (req, res) => {
         });
     }
 };
-
 exports.getAllDrivers = async (req, res) => {
     try {
         const drivers = await User.find({
@@ -601,6 +611,123 @@ exports.restoresuspendedDriver = async (req, res) => {
         });
     }
 };
+
+// exports.assignDriverToBooking = async (req, res) => {
+//     try {
+//         const { bookingId, driverId, truckId } = req.body;
+
+//         // Start transaction
+//         const session = await mongoose.startSession();
+//         session.startTransaction();
+
+//         try {
+//             // 1. Verify the user is actually a driver
+//             const driver = await User.findOne({
+//                 _id: driverId,
+//                 role: 'driver',
+//                 status: 'active'
+//             }).session(session);
+
+//             if (!driver) {
+//                 await session.abortTransaction();
+//                 session.endSession();
+//                 return res.status(400).json({
+//                     success: false,
+//                     message: "The specified user is not a registered driver"
+//                 });
+//             }
+
+//             // 2. Find and validate booking
+//             const booking = await TruckBooking.findById(bookingId)
+//                 .session(session)
+//                 .populate('userId', 'fullName phone');
+
+//             if (!booking) {
+//                 await session.abortTransaction();
+//                 session.endSession();
+//                 return res.status(404).json({
+//                     success: false,
+//                     message: "Booking not found"
+//                 });
+//             }
+
+//             // 3. Find and validate truck belongs to this driver
+//             const truck = await TruckRegistration.findOne({
+//                 _id: truckId,
+//                 userId: driverId,  // Ensure truck belongs to this driver
+//                 status: 'approved'
+//             }).session(session);
+
+//             if (!truck) {
+//                 await session.abortTransaction();
+//                 session.endSession();
+//                 return res.status(400).json({
+//                     success: false,
+//                     message: "Truck not found, not approved, or doesn't belong to this driver"
+//                 });
+//             }
+
+//             // 4. Check if truck is already assigned
+//             const existingAssignment = await TruckBooking.findOne({
+//                 truckId: truckId,
+//                 status: { $in: ['assigned', 'in-progress'] }
+//             }).session(session);
+
+//             if (existingAssignment) {
+//                 await session.abortTransaction();
+//                 session.endSession();
+//                 return res.status(400).json({
+//                     success: false,
+//                     message: "This truck is already assigned to another active booking"
+//                 });
+//             }
+
+//             // 5. Update records
+//             booking.assignedDriverId = driverId;
+//             booking.truckId = truckId;
+//             booking.status = 'assigned';
+//             booking.assignedAt = new Date();
+//             booking.approvedBy = req.admin.adminId;
+            
+//             truck.isAvailable = false;
+//             truck.bookingStatus = 'assigned';
+
+//             await Promise.all([
+//                 booking.save({ session }),
+//                 truck.save({ session })
+//             ]);
+
+//             await session.commitTransaction();
+//             session.endSession();
+
+//             // 6. Get fully populated response
+//             const updatedBooking = await TruckBooking.findById(bookingId)
+//                 .populate('userId', 'fullName phone email')
+//                 .populate('assignedDriverId', 'fullName phone')
+//                 .populate('truckId');
+
+//             res.status(200).json({
+//                 success: true,
+//                 message: "Driver and truck assigned successfully",
+//                 booking: updatedBooking
+//             });
+
+//         } catch (error) {
+//             await session.abortTransaction();
+//             session.endSession();
+//             throw error;
+//         }
+
+//     } catch (error) {
+//         console.error("Error assigning driver:", error);
+//         res.status(500).json({
+//             success: false,
+//             message: "Failed to assign driver",
+//             error: error.message
+//         });
+//     }
+// };
+
 exports.assignDriverToBooking = async (req, res) => {
     try {
         const { bookingId, driverId, truckId } = req.body;
@@ -610,7 +737,7 @@ exports.assignDriverToBooking = async (req, res) => {
         session.startTransaction();
 
         try {
-            // 1. Verify the user is actually a driver
+            // 1. Validate driver
             const driver = await User.findOne({
                 _id: driverId,
                 role: 'driver',
@@ -626,7 +753,7 @@ exports.assignDriverToBooking = async (req, res) => {
                 });
             }
 
-            // 2. Find and validate booking
+            // 2. Validate booking
             const booking = await TruckBooking.findById(bookingId)
                 .session(session)
                 .populate('userId', 'fullName phone');
@@ -640,14 +767,14 @@ exports.assignDriverToBooking = async (req, res) => {
                 });
             }
 
-            // 3. Find and validate truck belongs to this driver
-            const truck = await TruckRegistration.findOne({
+            // 3. Validate truck and ownership
+            const assignedTruck = await TruckRegistration.findOne({
                 _id: truckId,
-                userId: driverId,  // Ensure truck belongs to this driver
+                userId: driverId,
                 status: 'approved'
             }).session(session);
 
-            if (!truck) {
+            if (!assignedTruck) {
                 await session.abortTransaction();
                 session.endSession();
                 return res.status(400).json({
@@ -656,7 +783,7 @@ exports.assignDriverToBooking = async (req, res) => {
                 });
             }
 
-            // 4. Check if truck is already assigned
+            // 4. Ensure truck is not already assigned
             const existingAssignment = await TruckBooking.findOne({
                 truckId: truckId,
                 status: { $in: ['assigned', 'in-progress'] }
@@ -671,34 +798,51 @@ exports.assignDriverToBooking = async (req, res) => {
                 });
             }
 
-            // 5. Update records
+            // 5. Perform assignment
             booking.assignedDriverId = driverId;
             booking.truckId = truckId;
             booking.status = 'assigned';
             booking.assignedAt = new Date();
             booking.approvedBy = req.admin.adminId;
-            
-            truck.isAvailable = false;
-            truck.bookingStatus = 'assigned';
+
+            assignedTruck.isAvailable = false;
+            assignedTruck.bookingStatus = 'assigned';
 
             await Promise.all([
                 booking.save({ session }),
-                truck.save({ session })
+                assignedTruck.save({ session })
             ]);
 
             await session.commitTransaction();
             session.endSession();
 
-            // 6. Get fully populated response
+            // 6. Populate full updated booking details
             const updatedBooking = await TruckBooking.findById(bookingId)
-                .populate('userId', 'fullName phone email')
-                .populate('assignedDriverId', 'fullName phone')
-                .populate('truckId');
+                .populate('userId', 'fullName phone email') // Customer info
+                .populate('assignedDriverId', 'fullName phone email') // Assigned driver info
+                .populate({
+                    path: 'truckId',
+                    populate: {
+                        path: 'userId',
+                        select: 'fullName phone email' // Truck owner's (driver's) info
+                    }
+                });
+
+            // 7. Transform truck data to rename `userId` → `driverId`
+            const populatedTruck = updatedBooking.truckId.toObject();
+            populatedTruck.driverId = populatedTruck.userId;
+            delete populatedTruck.userId;
+
+            // 8. Final shaped response
+            const response = {
+                ...updatedBooking.toObject(),
+                truckId: populatedTruck
+            };
 
             res.status(200).json({
                 success: true,
                 message: "Driver and truck assigned successfully",
-                booking: updatedBooking
+                booking: response
             });
 
         } catch (error) {
@@ -716,6 +860,8 @@ exports.assignDriverToBooking = async (req, res) => {
         });
     }
 };
+
+
 exports.getAllOrders = async (req, res) => {
     try {
         const orders = await TruckBooking.find({
@@ -970,7 +1116,6 @@ exports.getCustomerGrowth = async (req, res) => {
         res.status(500).json({ success: false, message: "Failed to fetch customer growth", error: error.message });
     }
 };
-
 exports.getBookingTracking = async (req, res) => {
     try {
         const { bookingId } = req.params;
