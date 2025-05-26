@@ -21,10 +21,6 @@ router.get('/places/suggestions',
 );
 
 // Complete rate calculation
-router.post('/rates/calculate', 
-  authorizeRoles('customer', 'driver'), 
-  customerController.calculateCompleteRate
-);
-
+router.post('/rates/calculate', customerController.calculateCompleteRate);
 
 module.exports = router;
