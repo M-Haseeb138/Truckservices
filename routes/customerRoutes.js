@@ -22,7 +22,6 @@ router.get('/places/suggestions',
 
 // Complete rate calculation
 router.post('/rates/calculate', 
-  verifyToken, 
   authorizeRoles('customer', 'driver'), 
   customerController.calculateCompleteRate
 );
