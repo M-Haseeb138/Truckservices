@@ -569,7 +569,8 @@ exports.assignDriverToBooking = async (req, res) => {
             // 1. Verify the user is actually a driver
             const driver = await User.findOne({
                 _id: driverId,
-                role: 'driver'
+                role: 'driver',
+                status: 'active'
             }).session(session);
 
             if (!driver) {
@@ -926,7 +927,42 @@ exports.getCustomerGrowth = async (req, res) => {
     }
 };
 
+exports.getBookingTracking = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
 
+        const booking = await TruckBooking.findById(bookingId)
+            .select('fromCoordinates toCoordinates currentLocation status trackingId userId assignedDriverId')
+            .populate('userId', 'fullName phone')
+            .populate('assignedDriverId', 'fullName phone');
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: "Booking not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: {
+                from: booking.fromCoordinates,
+                to: booking.toCoordinates,
+                currentLocation: booking.currentLocation,
+                status: booking.status,
+                trackingId: booking.trackingId,
+                customer: booking.userId,
+                driver: booking.assignedDriverId
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: "Failed to get booking tracking",
+            error: error.message
+        });
+    }
+};
 // Get booking timeline
 // exports.getBookingTimeline = async (req, res) => {
 //     try {
@@ -964,3 +1000,147 @@ exports.getCustomerGrowth = async (req, res) => {
 //         });
 //     }
 // };
+// Admin gets all active tracking
+exports.getAllActiveTracking = async (req, res) => {
+  try {
+    const activeBookings = await TruckBooking.find({
+      status: { $in: ['assigned', 'in-progress'] }
+    })
+    .select('trackingId route currentLocation status assignedDriverId userId')
+    .populate('assignedDriverId', 'fullName phone')
+    .populate('userId', 'fullName phone');
+
+    res.status(200).json({
+      success: true,
+      count: activeBookings.length,
+      data: activeBookings
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to get active tracking",
+      error: error.message
+    });
+  }
+};
+
+///////////////
+// Get real-time location of a specific truck
+exports.getTruckLocation = async (req, res) => {
+  try {
+    const { truckId } = req.params;
+
+    // Find the active booking for this truck
+    const booking = await TruckBooking.findOne({
+      truckId,
+      status: { $in: ['assigned', 'in-progress'] }
+    })
+    .select('currentLocation trackingId')
+    .populate('truckId', 'truckDetails.VehicleNo');
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "No active booking found for this truck"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        vehicleNo: booking.truckId.truckDetails.VehicleNo,
+        trackingId: booking.trackingId,
+        location: booking.currentLocation
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to get truck location",
+      error: error.message
+    });
+  }
+};
+
+// Get all active trucks with their locations
+exports.getAllActiveTruckLocations = async (req, res) => {
+  try {
+    const activeBookings = await TruckBooking.find({
+      status: { $in: ['assigned', 'in-progress'] },
+      'currentLocation.coordinates': { $exists: true }
+    })
+    .select('trackingId currentLocation status')
+    .populate('truckId', 'truckDetails.VehicleNo truckDetails.typeOfTruck')
+    .populate('assignedDriverId', 'fullName phone');
+
+    res.status(200).json({
+      success: true,
+      count: activeBookings.length,
+      data: activeBookings.map(booking => ({
+        trackingId: booking.trackingId,
+        vehicleNo: booking.truckId?.truckDetails?.VehicleNo,
+        truckType: booking.truckId?.truckDetails?.typeOfTruck,
+        driver: booking.assignedDriverId 
+          ? {
+              name: booking.assignedDriverId.fullName,
+              phone: booking.assignedDriverId.phone
+            }
+          : null,
+        location: booking.currentLocation,
+        status: booking.status,
+        lastUpdated: booking.currentLocation?.timestamp
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to get active truck locations",
+      error: error.message
+    });
+  }
+};
+
+// Get location history for a specific truck
+exports.getTruckLocationHistory = async (req, res) => {
+  try {
+    const { truckId } = req.params;
+    const { hours = 24 } = req.query; // Default to last 24 hours
+
+    const cutoffTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    const booking = await TruckBooking.findOne({
+      truckId,
+      status: { $in: ['assigned', 'in-progress', 'completed'] }
+    })
+    .select('locationHistory trackingId')
+    .populate('truckId', 'truckDetails.VehicleNo');
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "No booking found for this truck"
+      });
+    }
+
+    // Filter history by time range
+    const filteredHistory = booking.locationHistory.filter(
+      loc => loc.timestamp >= cutoffTime
+    );
+
+    res.status(200).json({
+      success: true,
+      data: {
+        vehicleNo: booking.truckId.truckDetails.VehicleNo,
+        trackingId: booking.trackingId,
+        history: filteredHistory,
+        pointsCount: filteredHistory.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to get location history",
+      error: error.message
+    });
+  }
+};

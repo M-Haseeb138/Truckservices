@@ -151,8 +151,61 @@ const truckBookingSchema = new mongoose.Schema({
   completedAt: Date,
   cancelledAt: Date,
   cancellationReason: String,
+route: {
+    start: {
+      address: String,
+      coordinates: {
+        lat: Number,
+        lng: Number
+      }
+    },
+    end: {
+      address: String,
+      coordinates: {
+        lat: Number,
+        lng: Number
+      }
+    },
+    distance: Number, // in km
+    estimatedDuration: String
+  },
+  currentLocation: {
+    coordinates: {
+      lat: Number,
+      lng: Number
+    },
+    address: String,
+    timestamp: Date
+  },
+  locationHistory: [{
+    coordinates: {
+      lat: Number,
+      lng: Number
+    },
+    address: String,
+    timestamp: { type: Date, default: Date.now }
+  }],
+  rate: {
+    type: Number,
+    required: true
+  },
+  rateDetails: {
+    baseRatePerKm: Number,
+    minimumCharge: Number,
+    calculatedDistance: Number,
+    noOfTrucks: Number,
+    currency: {
+      type: String,
+      default: "PKR"
+    }
+  },
+  locationUpdateFrequency: { 
+  type: Number, 
+  default: 60 // seconds between updates
+}
+},
 
-}, { timestamps: true });
+ { timestamps: true });
 
 module.exports = mongoose.model("TruckBooking", truckBookingSchema);
 

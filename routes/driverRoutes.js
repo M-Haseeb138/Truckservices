@@ -22,6 +22,8 @@ router.get("/MyTrucks", verifyToken, authorizeRoles('driver'), driverController.
 router.get("/getmyassignments", verifyToken, authorizeRoles('driver'), driverController.getDriverAssignments);
 router.put("/assignments/status", verifyToken, authorizeRoles('driver'), driverController.updateAssignmentStatus);
 router.put("/assignments/:bookingId", verifyToken, authorizeRoles('driver'), driverController.completeBooking);
+router.put("/updateLocation", verifyToken, authorizeRoles('driver'), driverController.updateLocation);
+router.put("/startTrip", verifyToken, authorizeRoles('driver'), driverController.startTrip);
 module.exports = router;
 
 

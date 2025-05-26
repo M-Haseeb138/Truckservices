@@ -1,7 +1,7 @@
 const User = require("../Models/userModel");
 const TruckRegistration = require("../Models/truckRegister");
 const TruckBooking = require("../Models/TruckBooking");
-
+const LocationService = require('../services/locationService');
 exports.getMyTrucks = async (req, res) => {
     try {
         console.log("Current user ID:", req.user.userId); // ✅ Use userId
@@ -358,4 +358,149 @@ exports.completeBooking = async (req, res) => {
             error: error.message
         });
     }
+};
+// Driver starts trip (sets starting point)
+// In driverController.js
+exports.startTrip = async (req, res) => {
+  try {
+    const { bookingId, lat, lng } = req.body;
+    const driverId = req.user.userId; // Get from authenticated user
+
+    // Get address from coordinates
+    const address = await LocationService.reverseGeocode(lat, lng);
+
+    // Update booking with starting point
+    const booking = await TruckBooking.findOneAndUpdate(
+      {
+        _id: bookingId,
+        assignedDriverId: driverId,
+        status: 'assigned' // Correct status check
+      },
+      {
+        $set: {
+          status: 'in-progress',
+          'currentLocation': {
+            coordinates: { lat, lng },
+            address,
+            timestamp: new Date()
+          },
+          'route.actualStart': {
+            coordinates: { lat, lng },
+            address,
+            timestamp: new Date()
+          }
+        },
+        $push: {
+          statusHistory: {
+            status: 'in-progress',
+            changedAt: new Date(),
+            changedBy: driverId,
+            notes: 'Trip started by driver'
+          }
+        }
+      },
+      { new: true }
+    ).populate('truckId', 'truckDetails.VehicleNo');
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found, not assigned to you, or not in 'assigned' status"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Trip started successfully",
+      data: {
+        bookingId: booking._id,
+        trackingId: booking.trackingId,
+        vehicleNo: booking.truckId.truckDetails.VehicleNo,
+        currentLocation: booking.currentLocation,
+        status: booking.status
+      }
+    });
+  } catch (error) {
+    console.error('Start trip error:', error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to start trip",
+      error: error.message
+    });
+  }
+};
+
+// In driverController.js
+exports.setUpdateFrequency = async (req, res) => {
+  try {
+    const { frequency } = req.body; // in seconds
+    await User.findByIdAndUpdate(req.user.userId, { 
+      locationUpdateFrequency: frequency 
+    });
+    res.status(200).json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+// In driverController.js
+exports.updateLocation = async (req, res) => {
+  try {
+    const { bookingId, lat, lng } = req.body;
+
+    // Verify booking assignment
+    const booking = await TruckBooking.findOneAndUpdate(
+      {
+        _id: bookingId,
+        assignedDriverId: req.user.userId,
+        status: 'in-progress'
+      },
+      {
+        currentLocation: {
+          coordinates: { lat, lng },
+          address: await LocationService.reverseGeocode(lat, lng),
+          timestamp: new Date()
+        },
+        $push: {
+          locationHistory: {
+            coordinates: { lat, lng },
+            timestamp: new Date()
+          }
+        }
+      },
+      { new: true }
+    );
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Active booking not found"
+      });
+    }
+
+    // Broadcast to WebSocket clients
+    if (req.app.locals.wss) {
+      req.app.locals.wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN && 
+            client.trackingBookingId === bookingId) {
+          client.send(JSON.stringify({
+            type: 'location-update',
+            location: booking.currentLocation,
+            progress: calculateProgress(booking)
+          }));
+        }
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Location updated successfully"
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to update location",
+      error: error.message
+    });
+  }
 };

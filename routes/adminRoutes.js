@@ -35,7 +35,12 @@ router.get('/getTotalorderchart', verifyAdmin, adminController.getTotalorderchar
 router.get('/getCustomerGrowth', verifyAdmin, adminController.getCustomerGrowth);
 
 
-
+// //////////////
+// Tracking routes
+// Live tracking routes
+router.get('/truckslivelocation/:truckId/', verifyAdmin, adminController.getTruckLocation);
+router.get('/trucks/active-locations', verifyAdmin, adminController.getAllActiveTruckLocations);
+router.get('/trucks/:truckId/location-history', verifyAdmin, adminController.getTruckLocationHistory);
 
 
 
