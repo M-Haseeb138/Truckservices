@@ -105,8 +105,18 @@ const RateService = require('../services/rateService');
 
 exports.createBooking = async (req, res) => {
   try {
+    console.log("Received booking request:", req.body);
+
     const { from, to, truckTypes, noOfTrucks, weight, materials, scheduledDate } = req.body;
-    const userId = req.user.userId;
+    const userId = req.user?.userId;
+
+    // Input validation
+    if (!from || !to || !Array.isArray(truckTypes) || truckTypes.length === 0 || !noOfTrucks || !scheduledDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing or invalid required fields: from, to, truckTypes[], noOfTrucks, scheduledDate"
+      });
+    }
 
     // Get customer details
     const customer = await User.findById(userId);
@@ -114,16 +124,25 @@ exports.createBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: "Customer not found" });
     }
 
-    // Get coordinates and distance
+    // Geocode locations
     const [startLocation, endLocation] = await Promise.all([
       LocationService.geocodeAddress(from),
       LocationService.geocodeAddress(to)
     ]);
-    
+
+    if (!startLocation?.coordinates || !endLocation?.coordinates) {
+      return res.status(400).json({ success: false, message: "Invalid addresses provided" });
+    }
+
+    // Calculate route
     const { distance, duration } = await LocationService.calculateRoute(
       startLocation.coordinates,
       endLocation.coordinates
     );
+
+    if (!distance || isNaN(distance)) {
+      return res.status(500).json({ success: false, message: "Failed to calculate distance" });
+    }
 
     // Calculate rate
     const rateDetails = await RateService.calculateSimpleRate(
@@ -131,6 +150,10 @@ exports.createBooking = async (req, res) => {
       distance,
       noOfTrucks
     );
+
+    if (!rateDetails || !rateDetails.totalRate) {
+      return res.status(500).json({ success: false, message: "Failed to calculate rate" });
+    }
 
     // Create booking
     const booking = new TruckBooking({
@@ -157,7 +180,6 @@ exports.createBooking = async (req, res) => {
 
     await booking.save();
 
-    // Populate the response with all necessary details
     const populatedBooking = await TruckBooking.findById(booking._id)
       .populate('userId', 'fullName phone email')
       .lean();
@@ -167,17 +189,21 @@ exports.createBooking = async (req, res) => {
       message: "Booking created successfully",
       data: {
         ...populatedBooking,
-        rateDetails,
-        trackingId: booking.trackingId
+        trackingId: booking.trackingId,
+        rateDetails
       }
     });
+
   } catch (error) {
+    console.error("Booking creation error:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: "Internal Server Error",
+      error: error.message
     });
   }
 };
+
 exports.getMyBookings = async (req, res) => {
     try {
         // Fetch bookings with populated driver and truck details
