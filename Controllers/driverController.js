@@ -200,7 +200,7 @@ exports.registerTruck = async (req, res) => {
                 formattedAddress: driverAddress.address || '',
                 coordinates: driverAddress.coordinates || { lat: null, lng: null }
             },
-            lisenceNo: req.body.lisenceNo || ''
+            lisenceNo: req.body.lisenceNo  || ''
         };
 
         // Owner details
@@ -213,7 +213,7 @@ exports.registerTruck = async (req, res) => {
         };
 
         // Validate mandatory driver fields
-        const requiredDriverFields = ['dateOfBirth', 'province', 'lisenceNo'];
+        const requiredDriverFields = ['driverDateOfBirth', 'driverProvince', 'lisenceNo'];
         const missingDriverFields = requiredDriverFields.filter(
             field => !req.body[`driver${field.charAt(0).toUpperCase() + field.slice(1)}`]
         );
