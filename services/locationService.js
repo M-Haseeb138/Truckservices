@@ -30,7 +30,6 @@ class LocationService {
       throw error;
     }
   }
-
   // Get place autocomplete suggestions
   static async getPlaceSuggestions(input) {
     try {
@@ -51,7 +50,6 @@ class LocationService {
       throw error;
     }
   }
-
   // Get place details from place ID
   static async getPlaceDetails(placeId) {
     try {
@@ -76,9 +74,7 @@ class LocationService {
       console.error('Place details error:', error);
       throw error;
     }
-  }
-
- 
+  } 
   static async calculateRoute(origin, destination) {
     try {
       const response = await axios.get(

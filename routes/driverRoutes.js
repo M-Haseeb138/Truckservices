@@ -24,6 +24,17 @@ router.put("/assignments/status", verifyToken, authorizeRoles('driver'), driverC
 router.put("/assignments/:bookingId", verifyToken, authorizeRoles('driver'), driverController.completeBooking);
 router.put("/updateLocation", verifyToken, authorizeRoles('driver'), driverController.updateLocation);
 router.put("/startTrip", verifyToken, authorizeRoles('driver'), driverController.startTrip);
+//////////////
+router.put("/updatedriverlocation", 
+    verifyToken, 
+    authorizeRoles('driver'), 
+    driverController.updateDriverLocation
+);
+router.get("/nearbydriver", 
+    verifyToken, 
+    authorizeRoles('admin', 'customer'), 
+    driverController.getNearbyDrivers
+);
 module.exports = router;
 
 

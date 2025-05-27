@@ -18,6 +18,8 @@ const corsOptions = {
     allowedHeaders: ['Content-Type', 'Authorization']
 };
 
+
+
 app.use(cookieparser());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -111,3 +113,5 @@ wss.on('connection', (ws) => {
         console.log('WebSocket connection closed');
     });
 });
+
+

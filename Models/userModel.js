@@ -63,6 +63,8 @@ const UserSchema = new mongoose.Schema({
     },
     locationUpdateFrequency: {
         type: Number,
+
+        
         default: 60 // seconds between updates
     }
 }, { timestamps: true });

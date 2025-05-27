@@ -515,3 +515,150 @@ exports.updateLocation = async (req, res) => {
     });
   }
 };
+/////////////////////
+// Update driver's current location
+exports.updateDriverLocation = async (req, res) => {
+    try {
+        const { lat, lng } = req.body;
+        
+        // Validate coordinates
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid latitude and longitude are required"
+            });
+        }
+
+        // Get address from coordinates
+        let address;
+        try {
+            address = await LocationService.reverseGeocode(lat, lng);
+        } catch (error) {
+            console.error("Reverse geocoding error:", error);
+            address = "Address not available";
+        }
+
+        // Update driver's location
+        const updatedUser = await User.findByIdAndUpdate(
+            req.user.userId,
+            {
+                $set: {
+                    currentLocation: {
+                        coordinates: { lat: parseFloat(lat), lng: parseFloat(lng) },
+                        address: address,
+                        timestamp: new Date()
+                    }
+                },
+                // Initialize locationUpdateFrequency if it doesn't exist
+                $setOnInsert: {
+                    locationUpdateFrequency: 60 // default value
+                }
+            },
+            { 
+                new: true,
+                upsert: false // Don't create new document if not exists
+            }
+        ).select('currentLocation role');
+
+        if (!updatedUser) {
+            return res.status(404).json({
+                success: false,
+                message: "Driver not found"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Location updated successfully",
+            location: updatedUser.currentLocation
+        });
+
+    } catch (error) {
+        console.error("Error updating driver location:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to update location",
+            error: error.message
+        });
+    }
+};
+
+// Get nearby drivers (for admin/customer use)
+exports.getNearbyDrivers = async (req, res) => {
+    try {
+        const { lat, lng, radius = 25 } = req.query; // radius in km
+        
+        // Validate coordinates
+        if (!lat || !lng || isNaN(lat) || isNaN(lng) || isNaN(radius)) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid latitude, longitude and radius are required"
+            });
+        }
+
+        const centerPoint = {
+            type: "Point",
+            coordinates: [parseFloat(lng), parseFloat(lat)]
+        };
+
+        // Find drivers within radius
+        const nearbyDrivers = await User.find({
+            role: 'driver',
+            status: 'active',
+            currentLocation: {
+                $exists: true,
+                $ne: null
+            },
+            'currentLocation.coordinates': {
+                $exists: true,
+                $ne: null
+            }
+        }).where('currentLocation.coordinates').near({
+            center: centerPoint,
+            maxDistance: radius * 1000, // convert km to meters
+            spherical: true
+        }).select('fullName phone currentLocation');
+
+        res.status(200).json({
+            success: true,
+            count: nearbyDrivers.length,
+            drivers: nearbyDrivers.map(driver => ({
+                id: driver._id,
+                fullName: driver.fullName,
+                phone: driver.phone,
+                location: driver.currentLocation,
+                distance: calculateDistance(
+                    lat,
+                    lng,
+                    driver.currentLocation.coordinates.lat,
+                    driver.currentLocation.coordinates.lng
+                )
+            })).sort((a, b) => a.distance - b.distance)
+        });
+
+    } catch (error) {
+        console.error("Error getting nearby drivers:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to get nearby drivers",
+            error: error.message
+        });
+    }
+};
+
+// Helper function to calculate distance between two coordinates in km
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1); 
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    return R * c; // Distance in km
+}
+
+function deg2rad(deg) {
+    return deg * (Math.PI/180);
+}
