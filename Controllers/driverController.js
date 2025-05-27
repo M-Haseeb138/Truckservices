@@ -173,7 +173,7 @@ exports.registerTruck = async (req, res) => {
             });
         }
 
-        // Parse the driver address from request body
+        // Parse driver address
         let driverAddress = {};
         try {
             if (typeof req.body.driverAddress === 'string') {
@@ -188,7 +188,33 @@ exports.registerTruck = async (req, res) => {
             });
         }
 
-        // Driver details
+        // Validate mandatory driver fields
+        const requiredDriverFields = ['driverDateOfBirth', 'driverProvince', 'lisenceNo'];
+        const missingDriverFields = requiredDriverFields.filter(
+            field => !req.body[field]
+        );
+
+        if (missingDriverFields.length > 0 || !driverAddress.address) {
+            return res.status(400).json({
+                success: false,
+                message: "Driver's province, address, date of birth, and license number are required"
+            });
+        }
+
+        // Validate mandatory owner fields
+        const requiredOwnerFields = ['truckOwnerName', 'ownerMobileNo', 'ownerDateOfBirth', 'ownerProvince', 'ownerAddress'];
+        const missingOwnerFields = requiredOwnerFields.filter(
+            field => !req.body[field]
+        );
+
+        if (missingOwnerFields.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Owner name, mobile, DOB, province, and address are required"
+            });
+        }
+
+        // Construct driver details
         const driverDetails = {
             truckDriverName: user.fullName,
             mobileNo: user.phone,
@@ -200,10 +226,10 @@ exports.registerTruck = async (req, res) => {
                 formattedAddress: driverAddress.address || '',
                 coordinates: driverAddress.coordinates || { lat: null, lng: null }
             },
-            lisenceNo: req.body.lisenceNo  || ''
+            lisenceNo: req.body.lisenceNo || ''
         };
 
-        // Owner details
+        // Construct owner details
         const ownerDetails = {
             truckOwnerName: req.body.truckOwnerName,
             mobileNo: req.body.ownerMobileNo,
@@ -212,33 +238,7 @@ exports.registerTruck = async (req, res) => {
             address: req.body.ownerAddress
         };
 
-        // Validate mandatory driver fields
-        const requiredDriverFields = ['driverDateOfBirth', 'driverProvince', 'lisenceNo'];
-        const missingDriverFields = requiredDriverFields.filter(
-            field => !req.body[`driver${field.charAt(0).toUpperCase() + field.slice(1)}`]
-        );
-
-        if (missingDriverFields.length > 0 || !driverAddress.address) {
-            return res.status(400).json({
-                success: false,
-                message: "Driver's province, address, date of birth, and license number are required"
-            });
-        }
-
-        // Validate mandatory owner fields
-        const requiredOwnerFields = ['truckOwnerName', 'mobileNo', 'dateOfBirth', 'province', 'address'];
-        const missingOwnerFields = requiredOwnerFields.filter(
-            field => !req.body[`owner${field.charAt(0).toUpperCase() + field.slice(1)}`]
-        );
-
-        if (missingOwnerFields.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Owner name, mobile, DOB, province, and address are required"
-            });
-        }
-
-        // Build Truck object with all image paths
+        // Create new truck registration document
         const newTruck = new TruckRegistration({
             ownerDetails,
             driverDetails,
@@ -257,7 +257,6 @@ exports.registerTruck = async (req, res) => {
             status: 'pending'
         });
 
-        // Save to database
         const savedTruck = await newTruck.save();
 
         res.status(201).json({
@@ -284,6 +283,7 @@ exports.registerTruck = async (req, res) => {
         });
     }
 };
+
 // Complete a booking
 exports.completeBooking = async (req, res) => {
     try {
