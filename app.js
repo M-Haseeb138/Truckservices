@@ -46,70 +46,68 @@ const wss = new WebSocket.Server({ server });
 const adminClients = new Set();
 
 // In app.js after WebSocket server setup
+// In app.js after WebSocket server setup
 wss.on('connection', (ws) => {
-  ws.on('message', async (message) => {
-    try {
-      const data = JSON.parse(message);
-      
-      // Driver authentication
-      if (data.type === 'driver-auth') {
-        const decoded = jwt.verify(data.token, process.env.JWT_SECRET);
-        if (decoded.role !== 'driver') throw new Error('Unauthorized');
-        ws.driverId = decoded.userId;
-        ws.send(JSON.stringify({ type: 'auth-success' }));
-        return;
-      }
-      
-      // Location update from driver
-      if (data.type === 'location-update' && ws.driverId) {
-        const { bookingId, lat, lng } = data;
-        
-        // Update in database
-        const booking = await TruckBooking.findOneAndUpdate(
-          { _id: bookingId, assignedDriverId: ws.driverId },
-          {
-            currentLocation: {
-              coordinates: { lat, lng },
-              timestamp: new Date()
-            },
-            $push: {
-              locationHistory: {
-                coordinates: { lat, lng },
-                timestamp: new Date()
-              }
+    console.log('New WebSocket connection');
+    
+    ws.on('message', async (message) => {
+        try {
+            const data = JSON.parse(message);
+            
+            // Admin subscribes to track a driver
+            if (data.type === 'admin-track-driver' && data.token) {
+                try {
+                    const decoded = jwt.verify(data.token, process.env.JWT_SECRET);
+                    if (decoded.role !== 'admin') throw new Error('Unauthorized');
+                    
+                    ws.tracksDriver = data.driverId;
+                    ws.send(JSON.stringify({ type: 'tracking-authorized' }));
+                } catch (error) {
+                    ws.send(JSON.stringify({ type: 'error', message: 'Authentication failed' }));
+                    ws.close();
+                }
             }
-          },
-          { new: true }
-        );
-        
-        // Broadcast to all clients tracking this booking
-        wss.clients.forEach(client => {
-          if (client.readyState === WebSocket.OPEN && 
-              client.trackingBookingId === bookingId) {
-            client.send(JSON.stringify({
-              type: 'location-update',
-              location: booking.currentLocation,
-              progress: calculateProgress(booking)
-            }));
-          }
-        });
-      }
-      
-      // Customer subscription
-      if (data.type === 'track-booking') {
-        const decoded = jwt.verify(data.token, process.env.JWT_SECRET);
-        const booking = await TruckBooking.findOne({
-          _id: data.bookingId,
-          $or: [
-            { userId: decoded.userId },
-            { assignedDriverId: decoded.userId }
-          ]
-        });
-        if (!booking) throw new Error('Unauthorized');
-        ws.trackingBookingId = data.bookingId;
-      }
-    } catch (error) {
-      ws.send(JSON.stringify({ type: 'error', message: error.message }));
-    }
-  });
+            
+            // Driver updates location
+            if (data.type === 'driver-location-update' && data.token) {
+                try {
+                    const decoded = jwt.verify(data.token, process.env.JWT_SECRET);
+                    if (decoded.role !== 'driver') throw new Error('Unauthorized');
+                    
+                    const { lat, lng } = data;
+                    const address = await LocationService.reverseGeocode(lat, lng);
+                    
+                    // Update driver's location in database
+                    await User.findByIdAndUpdate(decoded.userId, {
+                        currentLocation: {
+                            coordinates: { lat, lng },
+                            address,
+                            timestamp: new Date()
+                        }
+                    });
+                    
+                    // Broadcast to admin clients tracking this driver
+                    wss.clients.forEach(client => {
+                        if (client.readyState === WebSocket.OPEN && client.tracksDriver === decoded.userId) {
+                            client.send(JSON.stringify({
+                                type: 'location-update',
+                                driverId: decoded.userId,
+                                location: { coordinates: { lat, lng }, address }
+                            }));
+                        }
+                    });
+                    
+                    ws.send(JSON.stringify({ type: 'location-update-success' }));
+                } catch (error) {
+                    ws.send(JSON.stringify({ type: 'error', message: error.message }));
+                }
+            }
+        } catch (error) {
+            console.error('WebSocket message error:', error);
+        }
+    });
+    
+    ws.on('close', () => {
+        console.log('WebSocket connection closed');
+    });
 });

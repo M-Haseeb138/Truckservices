@@ -52,6 +52,18 @@ const UserSchema = new mongoose.Schema({
     suspendedAt: {
         type: Date,
         required: false
+    },
+     currentLocation: {
+        coordinates: {
+            lat: { type: Number },
+            lng: { type: Number }
+        },
+        address: { type: String },
+        timestamp: { type: Date }
+    },
+    locationUpdateFrequency: {
+        type: Number,
+        default: 60 // seconds between updates
     }
 }, { timestamps: true });
 

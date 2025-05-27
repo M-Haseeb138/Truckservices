@@ -4,6 +4,242 @@ const TruckRegistration = require("../Models/truckRegister");
 const TruckBooking = require("../Models/TruckBooking");
 const mongoose = require('mongoose');
 
+// Helper function to calculate distance between two coordinates in km
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1); 
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    return R * c; // Distance in km
+}
+
+function deg2rad(deg) {
+    return deg * (Math.PI/180);
+}
+
+exports.getMatchingDriversForBooking = async (req, res) => {
+    try {
+        const { bookingId } = req.params;
+        const maxDistance = 25; // 25km radius for matching drivers
+
+        console.log(`[MatchingDrivers] Starting search for booking: ${bookingId}`);
+
+        // 1. Get the booking details
+        const booking = await TruckBooking.findById(bookingId)
+            .select('truckTypes weight materials route.start');
+            
+        if (!booking) {
+            console.log(`[MatchingDrivers] Booking not found: ${bookingId}`);
+            return res.status(404).json({
+                success: false,
+                message: "Booking not found"
+            });
+        }
+
+        if (!booking.route?.start?.coordinates) {
+            return res.status(400).json({
+                success: false,
+                message: "Booking start location is required"
+            });
+        }
+
+        const bookingCoords = booking.route.start.coordinates;
+
+        // 2. Find all drivers currently assigned to active bookings
+        const activeBookings = await TruckBooking.find({
+            status: { $in: ['assigned', 'in-progress'] },
+            assignedDriverId: { $exists: true }
+        });
+        const assignedDriverIds = activeBookings.map(b => b.assignedDriverId?.toString()).filter(id => id);
+
+        // 3. Find all approved trucks that are available and not assigned
+        const allPotentialTrucks = await TruckRegistration.find({
+            status: 'approved',
+            isAvailable: true,
+            userId: { $nin: assignedDriverIds }
+        }).populate({
+            path: 'userId',
+            select: 'fullName phone email currentLocation'
+        });
+
+        // 4. Filter trucks that match requirements
+        const matchingTrucks = allPotentialTrucks.filter(truck => {
+            // Check truck type
+            const typeMatches = booking.truckTypes.some(bookingType => {
+                const normalizedBookingType = bookingType.toLowerCase().trim();
+                const normalizedTruckType = truck.truckDetails.typeOfTruck.toLowerCase().trim();
+                return normalizedTruckType.includes(normalizedBookingType) || 
+                       normalizedBookingType.includes(normalizedTruckType);
+            });
+
+            // Check weight
+            const normalizeWeight = (weight) => {
+                if (!weight) return '';
+                return weight.toString().toLowerCase()
+                    .replace(/\s+/g, '')
+                    .replace(/upto/gi, '')
+                    .replace(/mt/gi, '')
+                    .replace(/ton/gi, '')
+                    .replace(/,/g, '')
+                    .trim();
+            };
+
+            const bookingWeight = normalizeWeight(booking.weight);
+            const truckWeight = normalizeWeight(truck.truckDetails.weight);
+            const weightMatches = truckWeight === bookingWeight;
+
+            // Check location proximity
+            let distance = null;
+            let locationMatches = true;
+            
+            if (truck.userId?.currentLocation?.coordinates) {
+                const driverCoords = truck.userId.currentLocation.coordinates;
+                distance = calculateDistance(
+                    bookingCoords.lat,
+                    bookingCoords.lng,
+                    driverCoords.lat,
+                    driverCoords.lng
+                );
+                locationMatches = distance <= maxDistance;
+            }
+
+            return typeMatches && weightMatches && locationMatches;
+        });
+
+        console.log(`[MatchingDrivers] Found ${matchingTrucks.length} matching trucks`);
+
+        // 5. If no matches found, provide detailed analysis
+        if (matchingTrucks.length === 0) {
+            const analysis = {
+                totalApprovedTrucks: allPotentialTrucks.length,
+                matchingTypeWrongWeight: 0,
+                matchingWeightWrongType: 0,
+                unavailableButMatching: 0,
+                assignedButMatching: 0,
+                tooFarButMatching: 0
+            };
+
+            allPotentialTrucks.forEach(truck => {
+                const typeMatches = booking.truckTypes.some(bookingType => {
+                    const normalizedBookingType = bookingType.toLowerCase().trim();
+                    const normalizedTruckType = truck.truckDetails.typeOfTruck.toLowerCase().trim();
+                    return normalizedTruckType.includes(normalizedBookingType) || 
+                           normalizedBookingType.includes(normalizedTruckType);
+                });
+
+                const normalizeWeight = (weight) => {
+                    if (!weight) return '';
+                    return weight.toString().toLowerCase()
+                        .replace(/\s+/g, '')
+                        .replace(/upto/gi, '')
+                        .replace(/mt/gi, '')
+                        .replace(/ton/gi, '')
+                        .replace(/,/g, '')
+                        .trim();
+                };
+
+                const bookingWeight = normalizeWeight(booking.weight);
+                const truckWeight = normalizeWeight(truck.truckDetails.weight);
+                const weightMatches = truckWeight === bookingWeight;
+
+                let distance = null;
+                let locationMatches = true;
+                
+                if (truck.userId?.currentLocation?.coordinates) {
+                    const driverCoords = truck.userId.currentLocation.coordinates;
+                    distance = calculateDistance(
+                        bookingCoords.lat,
+                        bookingCoords.lng,
+                        driverCoords.lat,
+                        driverCoords.lng
+                    );
+                    locationMatches = distance <= maxDistance;
+                }
+
+                if (typeMatches && !weightMatches) analysis.matchingTypeWrongWeight++;
+                if (weightMatches && !typeMatches) analysis.matchingWeightWrongType++;
+                if (typeMatches && weightMatches && !truck.isAvailable) analysis.unavailableButMatching++;
+                if (typeMatches && weightMatches && assignedDriverIds.includes(truck.userId._id.toString())) {
+                    analysis.assignedButMatching++;
+                }
+                if (typeMatches && weightMatches && !locationMatches) analysis.tooFarButMatching++;
+            });
+
+            console.log(`[MatchingDrivers] No matches found. Analysis:`, analysis);
+            return res.status(200).json({
+                success: true,
+                count: 0,
+                bookingRequirements: {
+                    truckTypes: booking.truckTypes,
+                    weight: booking.weight,
+                    materials: booking.materials,
+                    location: booking.route.start
+                },
+                availableDrivers: [],
+                matchingAnalysis: analysis,
+                maxDistance
+            });
+        }
+
+        // 6. Prepare response with drivers sorted by distance
+        const availableDrivers = matchingTrucks.map(truck => {
+            let distance = null;
+            if (truck.userId?.currentLocation?.coordinates) {
+                const driverCoords = truck.userId.currentLocation.coordinates;
+                distance = calculateDistance(
+                    bookingCoords.lat,
+                    bookingCoords.lng,
+                    driverCoords.lat,
+                    driverCoords.lng
+                );
+            }
+
+            return {
+                driverId: truck.userId._id,
+                fullName: truck.userId.fullName,
+                phone: truck.userId.phone,
+                email: truck.userId.email,
+                currentLocation: truck.userId.currentLocation,
+                distance: distance,
+                truck: {
+                    truckId: truck._id,
+                    typeOfTruck: truck.truckDetails.typeOfTruck,
+                    weight: truck.truckDetails.weight,
+                    vehicleNo: truck.truckDetails.VehicleNo,
+                    city: truck.truckDetails.Registercity
+                }
+            };
+        }).sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
+
+        res.status(200).json({
+            success: true,
+            count: availableDrivers.length,
+            bookingRequirements: {
+                truckTypes: booking.truckTypes,
+                weight: booking.weight,
+                materials: booking.materials,
+                location: booking.route.start
+            },
+            availableDrivers,
+            maxDistance
+        });
+
+    } catch (error) {
+        console.error("[MatchingDrivers] Error finding matching drivers:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to find matching drivers",
+            error: error.message
+        });
+    }
+};
+
+
+
 exports.approveBooking = async (req, res) => {
     try {
         const { bookingId, truckId } = req.params;
@@ -237,181 +473,18 @@ exports.getRegisteredCustomers = async (req, res) => {
 
     }
 }
-exports.getMatchingDriversForBooking = async (req, res) => {
-    try {
-        const { bookingId } = req.params;
-        console.log(`[MatchingDrivers] Starting search for booking: ${bookingId}`);
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
 
-        const booking = await TruckBooking.findById(bookingId);
-        if (!booking) {
-            console.log(`[MatchingDrivers] Booking not found: ${bookingId}`);
-            return res.status(404).json({
-                success: false,
-                message: "Booking not found"
-            });
-        }
-
-        console.log(`[MatchingDrivers] Booking requirements:`, {
-            truckTypes: booking.truckTypes,
-            weight: booking.weight,
-            materials: booking.materials
-        });
-
-       
-        const normalizeWeight = (weight) => {
-            if (!weight) return '';
-            return weight.toString().toLowerCase()
-                .replace(/\s+/g, '')       // Remove spaces
-                .replace(/upto/gi, '')     // Remove "upto"
-                .replace(/mt/gi, '')       // Remove "mt"
-                .replace(/ton/gi, '')      // Remove "ton"
-                .replace(/,/g, '')         // Remove commas
-                .trim();
-        };
-
-        const bookingWeight = normalizeWeight(booking.weight);
-        console.log(`[MatchingDrivers] Normalized booking weight: ${bookingWeight}`);
-
-        // 2. Find all drivers currently assigned to active bookings
-        const activeBookings = await TruckBooking.find({
-            status: { $in: ['assigned', 'in-progress'] },
-            assignedDriverId: { $exists: true, $ne: null }
-        });
-        
-        const assignedDriverIds = activeBookings.map(b => b.assignedDriverId?.toString()).filter(id => id);
-        console.log(`[MatchingDrivers] Found ${assignedDriverIds.length} drivers currently assigned`);
-
-        // 3. Find all approved trucks that are available and not assigned
-        const allPotentialTrucks = await TruckRegistration.find({
-            status: 'approved',
-            isAvailable: true,
-            'userId': { $exists: true, $nin: assignedDriverIds }
-        }).populate('userId', 'fullName phone email');
-        
-        console.log(`[MatchingDrivers] Found ${allPotentialTrucks.length} potential trucks after availability check`);
-
-        // 4. Filter trucks that match requirements
-        const matchingTrucks = allPotentialTrucks.filter(truck => {
-            // Check truck type (case-insensitive)
-            const typeMatches = booking.truckTypes.some(bookingType => {
-                const normalizedBookingType = bookingType.toLowerCase().trim();
-                const normalizedTruckType = truck.truckDetails.typeOfTruck.toLowerCase().trim();
-                return normalizedTruckType === normalizedBookingType;
-            });
-
-            // Check weight
-            const truckWeight = normalizeWeight(truck.truckDetails.weight);
-            const weightMatches = truckWeight === bookingWeight;
-
-            if (typeMatches && weightMatches) {
-                console.log(`[MatchingDrivers] Found matching truck:`, {
-                    truckId: truck._id,
-                    type: truck.truckDetails.typeOfTruck,
-                    weight: truck.truckDetails.weight,
-                    driver: truck.userId?._id
-                });
-            }
-
-            return typeMatches && weightMatches;
-        });
-
-        console.log(`[MatchingDrivers] Found ${matchingTrucks.length} matching trucks`);
-
-        // 5. If no matches found, provide detailed analysis
-        if (matchingTrucks.length === 0) {
-            const analysis = {
-                totalApprovedTrucks: allPotentialTrucks.length,
-                matchingTypeWrongWeight: 0,
-                matchingWeightWrongType: 0,
-                unavailableButMatching: 0,
-                assignedButMatching: 0
-            };
-
-            allPotentialTrucks.forEach(truck => {
-                const typeMatches = booking.truckTypes.some(bookingType => {
-                    const normalizedBookingType = bookingType.toLowerCase().trim();
-                    const normalizedTruckType = truck.truckDetails.typeOfTruck.toLowerCase().trim();
-                    return normalizedTruckType === normalizedBookingType;
-                });
-
-                const truckWeight = normalizeWeight(truck.truckDetails.weight);
-                const weightMatches = truckWeight === bookingWeight;
-
-                if (typeMatches && !weightMatches) analysis.matchingTypeWrongWeight++;
-                if (weightMatches && !typeMatches) analysis.matchingWeightWrongType++;
-                if (typeMatches && weightMatches && !truck.isAvailable) analysis.unavailableButMatching++;
-                if (typeMatches && weightMatches && assignedDriverIds.includes(truck.userId?._id.toString())) {
-                    analysis.assignedButMatching++;
-                }
-            });
-
-            console.log(`[MatchingDrivers] No matches found. Analysis:`, analysis);
-            return res.status(200).json({
-                success: true,
-                count: 0,
-                bookingRequirements: {
-                    truckTypes: booking.truckTypes,
-                    weight: booking.weight,
-                    materials: booking.materials
-                },
-                availableDrivers: [],
-                matchingAnalysis: analysis
-            });
-        }
-
-        // 6. Group trucks by driver
-        const driverMap = new Map();
-        matchingTrucks.forEach(truck => {
-            if (!truck.userId) return; // Skip if no user attached
-            
-            const driverId = truck.userId._id.toString();
-            if (!driverMap.has(driverId)) {
-                driverMap.set(driverId, {
-                    _id: truck.userId._id,
-                    fullName: truck.userId.fullName,
-                    phone: truck.userId.phone,
-                    email: truck.userId.email,
-                    trucks: []
-                });
-            }
-            driverMap.get(driverId).trucks.push({
-                truckId: truck._id,
-                typeOfTruck: truck.truckDetails.typeOfTruck,
-                weight: truck.truckDetails.weight,
-                vehicleNo: truck.truckDetails.VehicleNo,
-                city: truck.truckDetails.Registercity,
-                isAvailable: truck.isAvailable,
-                bookingStatus: truck.bookingStatus
-            });
-        });
-
-        const availableDrivers = Array.from(driverMap.values());
-        console.log(`[MatchingDrivers] Found ${availableDrivers.length} available drivers with matching trucks`);
-
-        res.status(200).json({
-            success: true,
-            count: availableDrivers.length,
-            bookingRequirements: {
-                truckTypes: booking.truckTypes,
-                weight: booking.weight,
-                materials: booking.materials
-            },
-            availableDrivers,
-            matchingAnalysis: {
-                totalApprovedTrucks: allPotentialTrucks.length,
-                matchingDriversFound: availableDrivers.length
-            }
-        });
-
-    } catch (error) {
-        console.error("[MatchingDrivers] Error finding matching drivers:", error);
-        res.status(500).json({
-            success: false,
-            message: "Failed to find matching drivers",
-            error: error.message
-        });
-    }
-};
 exports.getApprovedTrucks = async (req, res) => {
     try {
         // First get active bookings to build status map
@@ -611,7 +684,6 @@ exports.restoresuspendedDriver = async (req, res) => {
         });
     }
 };
-
 // exports.assignDriverToBooking = async (req, res) => {
 //     try {
 //         const { bookingId, driverId, truckId } = req.body;
@@ -860,8 +932,6 @@ exports.assignDriverToBooking = async (req, res) => {
         });
     }
 };
-
-
 exports.getAllOrders = async (req, res) => {
     try {
         const orders = await TruckBooking.find({
@@ -1152,43 +1222,7 @@ exports.getBookingTracking = async (req, res) => {
         });
     }
 };
-// Get booking timeline
-// exports.getBookingTimeline = async (req, res) => {
-//     try {
-//         const { bookingId } = req.params;
 
-//         const booking = await TruckBooking.findById(bookingId)
-//             .populate('statusHistory.changedBy', 'fullName role')
-//             .select('statusHistory trackingId');
-
-//         if (!booking) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "Booking not found"
-//             });
-//         }
-
-//         // Authorization check
-//         if (req.user.role !== 'admin' && booking.userId.toString() !== req.user.userId) {
-//             return res.status(403).json({
-//                 success: false,
-//                 message: "Unauthorized to view this booking"
-//             });
-//         }
-
-//         res.status(200).json({
-//             success: true,
-//             trackingId: booking.trackingId,
-//             timeline: booking.statusHistory
-//         });
-//     } catch (error) {
-//         res.status(500).json({
-//             success: false,
-//             message: "Failed to get booking timeline",
-//             error: error.message
-//         });
-//     }
-// };
 // Admin gets all active tracking
 exports.getAllActiveTracking = async (req, res) => {
   try {

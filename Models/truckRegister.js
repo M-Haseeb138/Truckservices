@@ -14,9 +14,13 @@ const truckSchema = new mongoose.Schema({
         mobileNo: { type: String, required: true },
         dateOfBirth: { type: Date, required: true },
         province: { type: String, required: true },
-        address: { type: String, required: true },
-        country: { type: String, required: true },
-        city: { type: String, required: true },
+          address: { 
+            formattedAddress: { type: String },
+            coordinates: {
+                lat: { type: Number },
+                lng: { type: Number }
+            }
+        },
         lisenceNo: { type: String, required: true }
     },
     idCardFrontImage: { type: String, required: true },

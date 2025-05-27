@@ -142,6 +142,7 @@ exports.updateAssignmentStatus = async (req, res) => {
         });
     }
 };
+
 exports.registerTruck = async (req, res) => {
     try {
         const user = await User.findById(req.user.userId);
@@ -172,6 +173,21 @@ exports.registerTruck = async (req, res) => {
             });
         }
 
+        // Parse the driver address from request body
+        let driverAddress = {};
+        try {
+            if (typeof req.body.driverAddress === 'string') {
+                driverAddress = JSON.parse(req.body.driverAddress);
+            } else if (req.body.driverAddress) {
+                driverAddress = req.body.driverAddress;
+            }
+        } catch (error) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid driver address format"
+            });
+        }
+
         // Driver details
         const driverDetails = {
             truckDriverName: user.fullName,
@@ -180,9 +196,10 @@ exports.registerTruck = async (req, res) => {
             CNIC: user.CNIC,
             dateOfBirth: req.body.driverDateOfBirth,
             province: req.body.driverProvince,
-            address: req.body.driverAddress,
-            country: req.body.driverCountry,
-            city: req.body.driverCity || '',
+            address: {
+                formattedAddress: driverAddress.address || '',
+                coordinates: driverAddress.coordinates || { lat: null, lng: null }
+            },
             lisenceNo: req.body.lisenceNo || ''
         };
 
@@ -192,24 +209,32 @@ exports.registerTruck = async (req, res) => {
             mobileNo: req.body.ownerMobileNo,
             dateOfBirth: req.body.ownerDateOfBirth,
             province: req.body.ownerProvince,
-            address: req.body.ownerAddress,
-            country: req.body.ownerCountry
+            address: req.body.ownerAddress
         };
 
         // Validate mandatory driver fields
-        if (!driverDetails.dateOfBirth || !driverDetails.province || !driverDetails.address || !driverDetails.country) {
+        const requiredDriverFields = ['dateOfBirth', 'province', 'lisenceNo'];
+        const missingDriverFields = requiredDriverFields.filter(
+            field => !req.body[`driver${field.charAt(0).toUpperCase() + field.slice(1)}`]
+        );
+
+        if (missingDriverFields.length > 0 || !driverAddress.address) {
             return res.status(400).json({
                 success: false,
-                message: "Driver's province, country, address, and date of birth are required"
+                message: "Driver's province, address, date of birth, and license number are required"
             });
         }
 
         // Validate mandatory owner fields
-        if (!ownerDetails.truckOwnerName || !ownerDetails.mobileNo || !ownerDetails.dateOfBirth || 
-            !ownerDetails.province || !ownerDetails.address || !ownerDetails.country) {
+        const requiredOwnerFields = ['truckOwnerName', 'mobileNo', 'dateOfBirth', 'province', 'address'];
+        const missingOwnerFields = requiredOwnerFields.filter(
+            field => !req.body[`owner${field.charAt(0).toUpperCase() + field.slice(1)}`]
+        );
+
+        if (missingOwnerFields.length > 0) {
             return res.status(400).json({
                 success: false,
-                message: "Owner name, mobile, DOB, province, address, and country are required"
+                message: "Owner name, mobile, DOB, province, and address are required"
             });
         }
 
@@ -235,24 +260,10 @@ exports.registerTruck = async (req, res) => {
         // Save to database
         const savedTruck = await newTruck.save();
 
-        // Return success response with all image URLs included in truckDetails
         res.status(201).json({
             success: true,
             message: "Truck registration submitted for approval",
-            truck: {
-                _id: savedTruck._id,
-                ownerDetails: savedTruck.ownerDetails,
-                driverDetails: savedTruck.driverDetails,
-                truckDetails: {
-                    ...savedTruck.truckDetails.toObject(),
-                    idCardFrontImage: savedTruck.idCardFrontImage,
-                    idCardBackImage: savedTruck.idCardBackImage,
-                    licenseFrontImage: savedTruck.licenseFrontImage,
-                    TruckPicture: savedTruck.TruckPicture
-                },
-                status: savedTruck.status,
-                createdAt: savedTruck.createdAt
-            }
+            truck: savedTruck
         });
 
     } catch (error) {
