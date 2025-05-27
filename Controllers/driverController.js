@@ -373,9 +373,6 @@ exports.registerTruck = async (req, res) => {
         });
     }
 };
-
-
-
 exports.completeBooking = async (req, res) => {
     try {
         const { bookingId } = req.params;
