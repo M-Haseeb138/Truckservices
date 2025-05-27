@@ -143,6 +143,149 @@ exports.updateAssignmentStatus = async (req, res) => {
     }
 };
 
+// exports.registerTruck = async (req, res) => {
+//     try {
+//         const user = await User.findById(req.user.userId);
+//         if (!user) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "User not found"
+//             });
+//         }
+
+//         // Validate required files
+//         const requiredFiles = [
+//             'idCardFrontImage',
+//             'idCardBackImage',
+//             'licenseFrontImage',
+//             'TruckPicture',
+//             'Truckdocument'
+//         ];
+
+//         const missingFiles = requiredFiles.filter(
+//             file => !req.files?.[file]?.[0]?.path
+//         );
+
+//         if (missingFiles.length > 0) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: `Missing required files: ${missingFiles.join(', ')}`
+//             });
+//         }
+
+//         // Parse driver address
+//         let driverAddress = {};
+//         try {
+//             if (typeof req.body.driverAddress === 'string') {
+//                 driverAddress = JSON.parse(req.body.driverAddress);
+//             } else if (req.body.driverAddress) {
+//                 driverAddress = req.body.driverAddress;
+//             }
+//         } catch (error) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Invalid driver address format"
+//             });
+//         }
+
+//         // Validate mandatory driver fields
+//         const requiredDriverFields = ['driverDateOfBirth', 'driverProvince', 'lisenceNo'];
+//         const missingDriverFields = requiredDriverFields.filter(
+//             field => !req.body[field]
+//         );
+
+//         if (missingDriverFields.length > 0 || !driverAddress.address) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Driver's province, address, date of birth, and license number are required"
+//             });
+//         }
+
+//         // Validate mandatory owner fields
+//         const requiredOwnerFields = ['truckOwnerName', 'ownerMobileNo', 'ownerDateOfBirth', 'ownerProvince', 'ownerAddress'];
+//         const missingOwnerFields = requiredOwnerFields.filter(
+//             field => !req.body[field]
+//         );
+
+//         if (missingOwnerFields.length > 0) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Owner name, mobile, DOB, province, and address are required"
+//             });
+//         }
+
+//         // Construct driver details
+//         const driverDetails = {
+//             truckDriverName: user.fullName,
+//             mobileNo: user.phone,
+//             email: user.email,
+//             CNIC: user.CNIC,
+//             dateOfBirth: req.body.driverDateOfBirth,
+//             province: req.body.driverProvince,
+//             address: {
+//                 formattedAddress: driverAddress.address || '',
+//                 coordinates: driverAddress.coordinates || { lat: null, lng: null }
+//             },
+//             lisenceNo: req.body.lisenceNo || ''
+//         };
+
+//         // Construct owner details
+//         const ownerDetails = {
+//             truckOwnerName: req.body.truckOwnerName,
+//             mobileNo: req.body.ownerMobileNo,
+//             dateOfBirth: req.body.ownerDateOfBirth,
+//             province: req.body.ownerProvince,
+//             address: req.body.ownerAddress
+//         };
+
+//         // Create new truck registration document
+//         const newTruck = new TruckRegistration({
+//             ownerDetails,
+//             driverDetails,
+//             idCardFrontImage: req.files.idCardFrontImage[0].path,
+//             idCardBackImage: req.files.idCardBackImage[0].path,
+//             licenseFrontImage: req.files.licenseFrontImage[0].path,
+//             TruckPicture: req.files.TruckPicture[0].path,
+//             truckDetails: {
+//                 typeOfTruck: req.body.typeOfTruck,
+//                 weight: req.body.weight,
+//                 Registercity: req.body.Registercity,
+//                 VehicleNo: req.body.VehicleNo,
+//                 Truckdocument: req.files.Truckdocument[0].path
+//             },
+//             userId: req.user.userId,
+//             status: 'pending'
+//         });
+
+//         const savedTruck = await newTruck.save();
+
+//         res.status(201).json({
+//             success: true,
+//             message: "Truck registration submitted for approval",
+//             truck: savedTruck
+//         });
+
+//     } catch (error) {
+//         console.error("Truck registration error:", error);
+
+//         if (error.name === 'ValidationError') {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: "Validation failed",
+//                 error: error.message
+//             });
+//         }
+
+//         res.status(500).json({
+//             success: false,
+//             message: "Truck registration failed",
+//             error: error.message
+//         });
+//     }
+// };
+
+// Complete a booking
+
 exports.registerTruck = async (req, res) => {
     try {
         const user = await User.findById(req.user.userId);
@@ -153,65 +296,17 @@ exports.registerTruck = async (req, res) => {
             });
         }
 
-        // Validate required files
-        const requiredFiles = [
-            'idCardFrontImage',
-            'idCardBackImage',
-            'licenseFrontImage',
-            'TruckPicture',
-            'Truckdocument'
-        ];
-
-        const missingFiles = requiredFiles.filter(
-            file => !req.files?.[file]?.[0]?.path
-        );
-
-        if (missingFiles.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: `Missing required files: ${missingFiles.join(', ')}`
-            });
-        }
-
-        // Parse driver address
+        // Parse driverAddress if it's a string
         let driverAddress = {};
         try {
-            if (typeof req.body.driverAddress === 'string') {
-                driverAddress = JSON.parse(req.body.driverAddress);
-            } else if (req.body.driverAddress) {
-                driverAddress = req.body.driverAddress;
-            }
+            driverAddress = typeof req.body.driverAddress === 'string'
+                ? JSON.parse(req.body.driverAddress)
+                : req.body.driverAddress || {};
         } catch (error) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid driver address format"
-            });
-        }
-
-        // Validate mandatory driver fields
-        const requiredDriverFields = ['driverDateOfBirth', 'driverProvince', 'lisenceNo'];
-        const missingDriverFields = requiredDriverFields.filter(
-            field => !req.body[field]
-        );
-
-        if (missingDriverFields.length > 0 || !driverAddress.address) {
-            return res.status(400).json({
-                success: false,
-                message: "Driver's province, address, date of birth, and license number are required"
-            });
-        }
-
-        // Validate mandatory owner fields
-        const requiredOwnerFields = ['truckOwnerName', 'ownerMobileNo', 'ownerDateOfBirth', 'ownerProvince', 'ownerAddress'];
-        const missingOwnerFields = requiredOwnerFields.filter(
-            field => !req.body[field]
-        );
-
-        if (missingOwnerFields.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Owner name, mobile, DOB, province, and address are required"
-            });
+            driverAddress = {
+                formattedAddress: '',
+                coordinates: { lat: null, lng: null }
+            };
         }
 
         // Construct driver details
@@ -223,8 +318,11 @@ exports.registerTruck = async (req, res) => {
             dateOfBirth: req.body.driverDateOfBirth,
             province: req.body.driverProvince,
             address: {
-                formattedAddress: driverAddress.address || '',
-                coordinates: driverAddress.coordinates || { lat: null, lng: null }
+                formattedAddress: driverAddress.formattedAddress || '',
+                coordinates: {
+                    lat: driverAddress.coordinates?.lat || null,
+                    lng: driverAddress.coordinates?.lng || null
+                }
             },
             lisenceNo: req.body.lisenceNo || ''
         };
@@ -235,23 +333,24 @@ exports.registerTruck = async (req, res) => {
             mobileNo: req.body.ownerMobileNo,
             dateOfBirth: req.body.ownerDateOfBirth,
             province: req.body.ownerProvince,
-            address: req.body.ownerAddress
+            address: req.body.ownerAddress,
+            country: req.body.ownerCountry || ''
         };
 
         // Create new truck registration document
         const newTruck = new TruckRegistration({
             ownerDetails,
             driverDetails,
-            idCardFrontImage: req.files.idCardFrontImage[0].path,
-            idCardBackImage: req.files.idCardBackImage[0].path,
-            licenseFrontImage: req.files.licenseFrontImage[0].path,
-            TruckPicture: req.files.TruckPicture[0].path,
+            idCardFrontImage: req.files?.idCardFrontImage?.[0]?.path || '',
+            idCardBackImage: req.files?.idCardBackImage?.[0]?.path || '',
+            licenseFrontImage: req.files?.licenseFrontImage?.[0]?.path || '',
+            TruckPicture: req.files?.TruckPicture?.[0]?.path || '',
             truckDetails: {
                 typeOfTruck: req.body.typeOfTruck,
                 weight: req.body.weight,
                 Registercity: req.body.Registercity,
                 VehicleNo: req.body.VehicleNo,
-                Truckdocument: req.files.Truckdocument[0].path
+                Truckdocument: req.files?.Truckdocument?.[0]?.path || ''
             },
             userId: req.user.userId,
             status: 'pending'
@@ -261,21 +360,12 @@ exports.registerTruck = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: "Truck registration submitted for approval",
+            message: "Truck registration submitted successfully",
             truck: savedTruck
         });
 
     } catch (error) {
         console.error("Truck registration error:", error);
-
-        if (error.name === 'ValidationError') {
-            return res.status(400).json({
-                success: false,
-                message: "Validation failed",
-                error: error.message
-            });
-        }
-
         res.status(500).json({
             success: false,
             message: "Truck registration failed",
@@ -284,7 +374,8 @@ exports.registerTruck = async (req, res) => {
     }
 };
 
-// Complete a booking
+
+
 exports.completeBooking = async (req, res) => {
     try {
         const { bookingId } = req.params;
