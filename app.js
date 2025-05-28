@@ -48,7 +48,6 @@ const wss = new WebSocket.Server({ server });
 const adminClients = new Set();
 
 // In app.js after WebSocket server setup
-// In app.js after WebSocket server setup
 wss.on('connection', (ws) => {
     console.log('New WebSocket connection');
     

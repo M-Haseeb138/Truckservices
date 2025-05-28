@@ -53,8 +53,8 @@ exports.signup = async (req, res) => {
         // Generate token
         const token = jwt.sign(
             { userId: user._id, userPhone: user.phone },
-            process.env.JWT_SECRET,
-            { expiresIn: "1d" }
+            process.env.JWT_SECRET
+            // { expiresIn: "1d" }
         );
 
         res.status(201).json({ 
@@ -93,8 +93,8 @@ exports.login = async (req, res) => {
 
         const token = jwt.sign(
             { userId: user._id, userPhone: user.phone },
-            process.env.JWT_SECRET,
-            { expiresIn: "1d" }
+            process.env.JWT_SECRET
+            // { expiresIn: "1d" }
         );
 
         res.status(200).json({
