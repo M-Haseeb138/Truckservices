@@ -65,7 +65,9 @@ exports.signup = async (req, res) => {
                 fullName: user.fullName,
                 phone: user.phone,
                 CNIC: user.CNIC,
-                role: user.role
+                role: user.role,
+                image:user.image
+
         
             }
         });
@@ -106,6 +108,7 @@ exports.login = async (req, res) => {
                 phone: user.phone,
                 CNIC: user.CNIC,
                 role: user.role,
+                 image:user.image,
                 isApproved: user.isApproved
             }
         });
