@@ -30,19 +30,18 @@ exports.getMatchingDriversForBooking = async (req, res) => {
 
         // 1. Get the booking details
         const booking = await TruckBooking.findById(bookingId)
-            .select('truckTypes weight materials route.start route.start.formattedAddress')
-
+            .select('truckTypes weight materials fromAddress');
 
         if (!booking) {
             console.log(`[MatchingDrivers] Booking not found: ${bookingId}`);
             return res.status(404).json({ success: false, message: "Booking not found" });
         }
 
-        if (!booking.route?.start?.coordinates) {
+        if (!booking.fromAddress?.coordinates) {
             return res.status(400).json({ success: false, message: "Booking start location is required" });
         }
 
-        const bookingCoords = booking.route.start.coordinates;
+        const bookingCoords = booking.fromAddress.coordinates;
         console.log(`[MatchingDrivers] Booking coords normalized:`, bookingCoords);
 
         // 2. Get all currently assigned drivers
@@ -58,9 +57,6 @@ exports.getMatchingDriversForBooking = async (req, res) => {
             isAvailable: true,
             userId: { $nin: assignedDriverIds }
         }).populate('userId', 'fullName phone email');
-
-
-
 
         // 4. Filter matching trucks
         const matchingTrucks = allPotentialTrucks.filter(truck => {
@@ -129,11 +125,9 @@ exports.getMatchingDriversForBooking = async (req, res) => {
                 count: 0,
                 bookingSummary: {
                     pickupLocation: {
-                        address: booking.route?.start?.formattedAddress || 'Address not available',
+                        address: booking.fromAddress.formattedAddress,
                         coordinates: bookingCoords
                     },
-
-
                     truckTypes: booking.truckTypes,
                     weight: booking.weight,
                     materials: booking.materials
@@ -176,7 +170,7 @@ exports.getMatchingDriversForBooking = async (req, res) => {
             maxDistance,
             bookingSummary: {
                 pickupLocation: {
-                    address: booking.route.start.address,
+                    address: booking.fromAddress.formattedAddress,
                     coordinates: bookingCoords
                 },
                 truckTypes: booking.truckTypes,
@@ -195,7 +189,6 @@ exports.getMatchingDriversForBooking = async (req, res) => {
         });
     }
 };
-
 
 exports.approveBooking = async (req, res) => {
     try {

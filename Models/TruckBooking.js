@@ -6,6 +6,16 @@ const truckBookingSchema = new mongoose.Schema({
     ref: "User",
     required: true
   },
+  distance: {
+  type: Number, // in km
+  required: false
+},
+
+estimatedDuration: {
+  type: String,
+  required: false
+},
+
   assignedDriverId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User"
@@ -162,21 +172,7 @@ const truckBookingSchema = new mongoose.Schema({
   cancelledAt: Date,
   cancellationReason: String,
   // In TruckBookingModel.js
-  route: {
-    start: {
-      formattedAddress: String,
-      coordinates: {
-        lat: Number,
-        lng: Number
-      }
-    },
-    end: {
-      formattedAddress: String,
-      coordinates: {
-        lat: Number,
-        lng: Number
-      }
-    },
+ route: {
     distance: Number, // in km
     estimatedDuration: String
   },

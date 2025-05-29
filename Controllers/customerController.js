@@ -67,9 +67,7 @@ exports.createBooking = async (req, res) => {
       trackingId: await generateUniqueTrackingId(),
       customerName: customer.fullName,
       customerPhone: customer.phone,
-      route: {
-        start: fromAddress,
-        end: toAddress,
+     route: {
         distance,
         estimatedDuration: duration
       },
