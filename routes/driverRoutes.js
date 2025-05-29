@@ -35,6 +35,12 @@ router.get("/nearbydriver",
     authorizeRoles('admin', 'customer'), 
     driverController.getNearbyDrivers
 );
+
+router.get("/getBookingStatusSummary",
+    verifyToken,
+    authorizeRoles('driver'),
+    driverController.getDriverBookingStatusSummary
+)
 module.exports = router;
 
 

@@ -16,11 +16,9 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c; // Distance in km
 }
-
 function deg2rad(deg) {
     return deg * (Math.PI / 180);
 }
-
 exports.getMatchingDriversForBooking = async (req, res) => {
     try {
         const { bookingId } = req.params;

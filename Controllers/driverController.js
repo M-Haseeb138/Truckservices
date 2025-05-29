@@ -142,7 +142,6 @@ exports.updateAssignmentStatus = async (req, res) => {
         });
     }
 };
-
 // exports.registerTruck = async (req, res) => {
 //     try {
 //         const user = await User.findById(req.user.userId);
@@ -459,7 +458,6 @@ exports.completeBooking = async (req, res) => {
     }
 };
 // Driver starts trip (sets starting point)
-// In driverController.js
 exports.startTrip = async (req, res) => {
   try {
     const { bookingId, lat, lng } = req.body;
@@ -528,8 +526,6 @@ exports.startTrip = async (req, res) => {
     });
   }
 };
-
-// In driverController.js
 exports.setUpdateFrequency = async (req, res) => {
   try {
     const { frequency } = req.body; // in seconds
@@ -541,8 +537,6 @@ exports.setUpdateFrequency = async (req, res) => {
     res.status(500).json({ success: false, error: error.message });
   }
 };
-
-// In driverController.js
 exports.updateLocation = async (req, res) => {
   try {
     const { bookingId, lat, lng } = req.body;
@@ -603,8 +597,6 @@ exports.updateLocation = async (req, res) => {
     });
   }
 };
-/////////////////////
-// Update driver's current location
 exports.updateDriverLocation = async (req, res) => {
     try {
         const { lat, lng } = req.body;
@@ -670,7 +662,6 @@ exports.updateDriverLocation = async (req, res) => {
         });
     }
 };
-
 // Get nearby drivers (for admin/customer use)
 exports.getNearbyDrivers = async (req, res) => {
     try {
@@ -733,7 +724,6 @@ exports.getNearbyDrivers = async (req, res) => {
         });
     }
 };
-
 // Helper function to calculate distance between two coordinates in km
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; // Radius of the earth in km
@@ -750,3 +740,124 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 function deg2rad(deg) {
     return deg * (Math.PI/180);
 }
+
+exports.getDriverBookingStatusSummary = async (req, res) => {
+    try {
+        const driverId = req.user.userId; // Get logged-in driver's ID
+        
+        // Verify the user is actually a driver
+        const driver = await User.findById(driverId);
+        if (!driver || driver.role !== 'driver') {
+            return res.status(403).json({
+                success: false,
+                message: "Access denied. Only drivers can view their bookings."
+            });
+        }
+
+        // Get ongoing bookings (assigned + in-progress) for this driver
+        const ongoingBookings = await TruckBooking.find({
+            assignedDriverId: driverId,
+            status: { $in: ['assigned', 'in-progress'] }
+        })
+        .populate('userId', 'fullName phone')
+        .populate('truckId', 'truckDetails.VehicleNo truckDetails.typeOfTruck')
+        .sort({ createdAt: -1 });
+
+        // Get completed bookings for this driver
+        const completedBookings = await TruckBooking.find({
+            assignedDriverId: driverId,
+            status: 'completed'
+        })
+        .populate('userId', 'fullName phone')
+        .populate('truckId', 'truckDetails.VehicleNo truckDetails.typeOfTruck')
+        .sort({ completedAt: -1 })
+        .limit(50);
+
+        // Format response with detailed rate calculation info
+        const response = {
+            success: true,
+            ongoingBookings: ongoingBookings.map(booking => {
+                const rateDetails = booking.rateDetails || {};
+                return {
+                    _id: booking._id,
+                    trackingId: booking.trackingId,
+                    from: booking.route?.start?.address || booking.from,
+                    to: booking.route?.end?.address || booking.to,
+                    scheduledDate: booking.scheduledDate,
+                    status: booking.status,
+                    customer: {
+                        name: booking.userId?.fullName,
+                        phone: booking.userId?.phone
+                    },
+                    truck: {
+                        vehicleNo: booking.truckId?.truckDetails?.VehicleNo,
+                        type: booking.truckId?.truckDetails?.typeOfTruck
+                    },
+                    rate: {
+                        total: booking.rate,
+                            baseRatePerKm: rateDetails.baseRatePerKm,
+                            distance: rateDetails.calculatedDistance,
+                            minimumCharge: rateDetails.minimumCharge,
+                            noOfTrucks: rateDetails.noOfTrucks,
+                            currency: rateDetails.currency || 'PKR'
+                    
+                    },
+                    assignedAt: booking.assignedAt,
+                    currentLocation: booking.currentLocation
+                };
+            }),
+            completedBookings: completedBookings.map(booking => {
+                const rateDetails = booking.rateDetails || {};
+                const durationHours = booking.startedAt && booking.completedAt 
+                    ? ((booking.completedAt - booking.startedAt) / (1000 * 60 * 60)).toFixed(1)
+                    : null;
+                
+                return {
+                    _id: booking._id,
+                    trackingId: booking.trackingId,
+                    from: booking.route?.start?.address || booking.from,
+                    to: booking.route?.end?.address || booking.to,
+                    completedAt: booking.completedAt,
+                    customer: {
+                        name: booking.userId?.fullName,
+                        phone: booking.userId?.phone
+                    },
+                    truck: {
+                        vehicleNo: booking.truckId?.truckDetails?.VehicleNo,
+                        type: booking.truckId?.truckDetails?.typeOfTruck
+                    },
+                    rate: {
+                        total: booking.rate,
+                        breakdown: {
+                            baseRatePerKm: rateDetails.baseRatePerKm,
+                            distance: rateDetails.calculatedDistance,
+                            minimumCharge: rateDetails.minimumCharge,
+                            noOfTrucks: rateDetails.noOfTrucks,
+                            currency: rateDetails.currency || 'PKR'
+                        }
+                    },
+                    tripDetails: {
+                        distance: booking.route?.distance,
+                        startedAt: booking.startedAt,
+                        completedAt: booking.completedAt,
+                        duration: durationHours ? `${durationHours} hours` : 'N/A'
+                    }
+                };
+            })
+        };
+
+        res.status(200).json(response);
+    } catch (error) {
+        console.error("🔴 Error in getDriverBookingStatusSummary:", {
+            error: error.message,
+            userId: req.user?.userId,
+            timestamp: new Date().toISOString()
+        });
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to get booking summary",
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+};
