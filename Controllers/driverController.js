@@ -2,6 +2,7 @@ const User = require("../Models/userModel");
 const TruckRegistration = require("../Models/truckRegister");
 const TruckBooking = require("../Models/TruckBooking");
 const LocationService = require('../services/locationService');
+const mongoose = require('mongoose');
 exports.getMyTrucks = async (req, res) => {
     try {
         console.log("Current user ID:", req.user.userId); // ✅ Use userId
@@ -391,7 +392,7 @@ exports.completeBooking = async (req, res) => {
                 });
             }
 
-            // Check if booking can be completed
+            // Validate booking status
             if (booking.status === 'completed') {
                 await session.abortTransaction();
                 session.endSession();
@@ -413,7 +414,7 @@ exports.completeBooking = async (req, res) => {
             // Update booking status
             booking.status = 'completed';
             booking.completedAt = new Date();
-            booking.completedBy = req.admin.adminId;
+            booking.completedBy = req.user.userId;
             await booking.save({ session });
 
             // Make the truck available again
@@ -431,16 +432,84 @@ exports.completeBooking = async (req, res) => {
             await session.commitTransaction();
             session.endSession();
 
+            // Get populated booking with refined structure
             const updatedBooking = await TruckBooking.findById(bookingId)
                 .populate('userId', 'fullName phone email')
                 .populate('assignedDriverId', 'fullName phone')
-                .populate('truckId');
+                .populate({
+                    path: 'truckId',
+                    select: 'truckDetails driverDetails ownerDetails TruckPicture status'
+                });
 
-            res.status(200).json({
+            // Format the response
+            const response = {
                 success: true,
                 message: "Booking completed successfully",
-                booking: updatedBooking
-            });
+                data: {
+                    bookingInfo: {
+                        _id: updatedBooking._id,
+                        trackingId: updatedBooking.trackingId,
+                        status: updatedBooking.status,
+                        scheduledDate: updatedBooking.scheduledDate,
+                        completedAt: updatedBooking.completedAt,
+                        assignedAt: updatedBooking.assignedAt,
+                        createdAt: updatedBooking.createdAt
+                    },
+                    routeDetails: {
+                        from: {
+                            address: updatedBooking.route?.start?.address || updatedBooking.from,
+                            coordinates: updatedBooking.route?.start?.coordinates
+                        },
+                        to: {
+                            address: updatedBooking.route?.end?.address || updatedBooking.to,
+                            coordinates: updatedBooking.route?.end?.coordinates
+                        },
+                        distance: updatedBooking.route?.distance,
+                        duration: updatedBooking.route?.estimatedDuration
+                    },
+                    customerDetails: {
+                        _id: updatedBooking.userId?._id,
+                        name: updatedBooking.userId?.fullName || updatedBooking.customerName,
+                        phone: updatedBooking.userId?.phone || updatedBooking.customerPhone,
+                        email: updatedBooking.userId?.email
+                    },
+                    cargoDetails: {
+                        materials: updatedBooking.materials,
+                        weight: updatedBooking.weight,
+                        truckType: updatedBooking.truckTypes?.[0] || 'N/A',
+                        noOfTrucks: updatedBooking.noOfTrucks
+                    },
+                    driverDetails: {
+                        _id: updatedBooking.assignedDriverId?._id,
+                        name: updatedBooking.assignedDriverId?.fullName,
+                        phone: updatedBooking.assignedDriverId?.phone
+                    },
+                    truckDetails: updatedBooking.truckId ? {
+                        vehicleNo: updatedBooking.truckId.truckDetails?.VehicleNo,
+                        type: updatedBooking.truckId.truckDetails?.typeOfTruck,
+                        weightCapacity: updatedBooking.truckId.truckDetails?.weight,
+                        picture: updatedBooking.truckId.TruckPicture,
+                        status: updatedBooking.truckId.status
+                    } : null,
+                    paymentDetails: {
+                        totalAmount: updatedBooking.rate,
+                        rateBreakdown: updatedBooking.rateDetails || {
+                            baseRatePerKm: null,
+                            minimumCharge: null,
+                            calculatedDistance: null,
+                            noOfTrucks: null,
+                            currency: 'PKR'
+                        }
+                    },
+                    timeline: {
+                        created: updatedBooking.createdAt,
+                        assigned: updatedBooking.assignedAt,
+                        completed: updatedBooking.completedAt
+                    }
+                }
+            };
+
+            res.status(200).json(response);
 
         } catch (error) {
             await session.abortTransaction();
@@ -449,11 +518,17 @@ exports.completeBooking = async (req, res) => {
         }
 
     } catch (error) {
-        console.error("Error completing booking:", error);
+        console.error("Error completing booking:", {
+            error: error.message,
+            bookingId: req.params.bookingId,
+            userId: req.user?.userId,
+            timestamp: new Date().toISOString()
+        });
+
         res.status(500).json({
             success: false,
             message: "Failed to complete booking",
-            error: error.message
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
 };
@@ -773,77 +848,143 @@ exports.getDriverBookingStatusSummary = async (req, res) => {
         .sort({ completedAt: -1 })
         .limit(50);
 
-        // Format response with detailed rate calculation info
+        // Format response to match the desired structure
         const response = {
             success: true,
-            ongoingBookings: ongoingBookings.map(booking => {
-                const rateDetails = booking.rateDetails || {};
-                return {
-                    _id: booking._id,
-                    trackingId: booking.trackingId,
-                    from: booking.route?.start?.address || booking.from,
-                    to: booking.route?.end?.address || booking.to,
-                    scheduledDate: booking.scheduledDate,
-                    status: booking.status,
-                    customer: {
-                        name: booking.userId?.fullName,
-                        phone: booking.userId?.phone
-                    },
-                    truck: {
-                        vehicleNo: booking.truckId?.truckDetails?.VehicleNo,
-                        type: booking.truckId?.truckDetails?.typeOfTruck
-                    },
-                    rate: {
-                        total: booking.rate,
-                            baseRatePerKm: rateDetails.baseRatePerKm,
-                            distance: rateDetails.calculatedDistance,
-                            minimumCharge: rateDetails.minimumCharge,
-                            noOfTrucks: rateDetails.noOfTrucks,
-                            currency: rateDetails.currency || 'PKR'
+            driver: {
+                id: driver._id.toString(),
+                name: driver.fullName,
+                phone: driver.phone
+            },
+            bookings: {
+                ongoing: ongoingBookings.map(booking => {
+                    const rateDetails = booking.rateDetails || {};
+                    const pickupCoords = booking.fromAddress?.coordinates || 
+                                       booking.route?.start?.coordinates || 
+                                       { lat: null, lng: null };
+                    const deliveryCoords = booking.toAddress?.coordinates || 
+                                         booking.route?.end?.coordinates || 
+                                         { lat: null, lng: null };
                     
-                    },
-                    assignedAt: booking.assignedAt,
-                    currentLocation: booking.currentLocation
-                };
-            }),
-            completedBookings: completedBookings.map(booking => {
-                const rateDetails = booking.rateDetails || {};
-                const durationHours = booking.startedAt && booking.completedAt 
-                    ? ((booking.completedAt - booking.startedAt) / (1000 * 60 * 60)).toFixed(1)
-                    : null;
-                
-                return {
-                    _id: booking._id,
-                    trackingId: booking.trackingId,
-                    from: booking.route?.start?.address || booking.from,
-                    to: booking.route?.end?.address || booking.to,
-                    completedAt: booking.completedAt,
-                    customer: {
-                        name: booking.userId?.fullName,
-                        phone: booking.userId?.phone
-                    },
-                    truck: {
-                        vehicleNo: booking.truckId?.truckDetails?.VehicleNo,
-                        type: booking.truckId?.truckDetails?.typeOfTruck
-                    },
-                    rate: {
-                        total: booking.rate,
-                        breakdown: {
-                            baseRatePerKm: rateDetails.baseRatePerKm,
-                            distance: rateDetails.calculatedDistance,
+                    return {
+                        bookingId: booking._id.toString(),
+                        trackingId: booking.trackingId,
+                        pickupLocation: {
+                            address: booking.fromAddress?.formattedAddress || 
+                                    booking.route?.start?.address || 
+                                    booking.from,
+                            coordinates: {
+                                lat: pickupCoords.lat,
+                                lng: pickupCoords.lng
+                            },
+                            timestamp: booking.scheduledDate?.toISOString() || new Date().toISOString()
+                        },
+                        deliveryLocation: {
+                            address: booking.toAddress?.formattedAddress || 
+                                    booking.route?.end?.address || 
+                                    booking.to,
+                            coordinates: {
+                                lat: deliveryCoords.lat,
+                                lng: deliveryCoords.lng
+                            }
+                        },
+                        customer: {
+                            name: booking.userId?.fullName,
+                            phone: booking.userId?.phone,
+                            id: booking.userId?._id.toString()
+                        },
+                        truck: {
+                            id: booking.truckId?._id.toString(),
+                            vehicleNo: booking.truckId?.truckDetails?.VehicleNo,
+                            type: booking.truckId?.truckDetails?.typeOfTruck
+                        },
+                        cargoDetails: {
+                            materials: booking.materials || booking.cargoDetails?.materials || ["Building Materials"],
+                            weight: booking.weight || booking.cargoDetails?.weight || "Upto 12 MT",
+                            truckTypes: booking.truckTypes || [booking.truckId?.truckDetails?.typeOfTruck] || ["Boom Truck-16Ft"]
+                        },
+                        pricing: {
+                            totalAmount: booking.rate,
+                            currency: rateDetails.currency || 'PKR',
+                            ratePerKm: rateDetails.baseRatePerKm,
+                            distanceKm: rateDetails.calculatedDistance,
                             minimumCharge: rateDetails.minimumCharge,
-                            noOfTrucks: rateDetails.noOfTrucks,
-                            currency: rateDetails.currency || 'PKR'
+                            noOfTrucks: rateDetails.noOfTrucks || 1
+                        },
+                        status: booking.status,
+                        actionsAvailable: booking.status === 'assigned' 
+                            ? ["start-trip", "cancel"] 
+                            : ["complete-trip", "update-location"]
+                    };
+                }),
+                completed: completedBookings.map(booking => {
+                    const rateDetails = booking.rateDetails || {};
+                    const durationHours = booking.startedAt && booking.completedAt 
+                        ? ((booking.completedAt - booking.startedAt) / (1000 * 60 * 60)).toFixed(1)
+                        : null;
+                    
+                    const pickupCoords = booking.fromAddress?.coordinates || 
+                                       booking.route?.start?.coordinates || 
+                                       { lat: null, lng: null };
+                    const deliveryCoords = booking.toAddress?.coordinates || 
+                                         booking.route?.end?.coordinates || 
+                                         { lat: null, lng: null };
+
+                    return {
+                        bookingId: booking._id.toString(),
+                        trackingId: booking.trackingId,
+                        pickupLocation: {
+                            address: booking.fromAddress?.formattedAddress || 
+                                    booking.route?.start?.address || 
+                                    booking.from,
+                            coordinates: {
+                                lat: pickupCoords.lat,
+                                lng: pickupCoords.lng
+                            },
+                            timestamp: booking.scheduledDate?.toISOString() || new Date().toISOString()
+                        },
+                        deliveryLocation: {
+                            address: booking.toAddress?.formattedAddress || 
+                                    booking.route?.end?.address || 
+                                    booking.to,
+                            coordinates: {
+                                lat: deliveryCoords.lat,
+                                lng: deliveryCoords.lng
+                            }
+                        },
+                        customer: {
+                            name: booking.userId?.fullName,
+                            phone: booking.userId?.phone,
+                            id: booking.userId?._id.toString()
+                        },
+                        truck: {
+                            id: booking.truckId?._id.toString(),
+                            vehicleNo: booking.truckId?.truckDetails?.VehicleNo,
+                            type: booking.truckId?.truckDetails?.typeOfTruck
+                        },
+                        cargoDetails: {
+                            materials: booking.materials || booking.cargoDetails?.materials || ["Building Materials"],
+                            weight: booking.weight || booking.cargoDetails?.weight || "Upto 12 MT",
+                            truckTypes: booking.truckTypes || [booking.truckId?.truckDetails?.typeOfTruck] || ["Boom Truck-16Ft"]
+                        },
+                        pricing: {
+                            totalAmount: booking.rate,
+                            currency: rateDetails.currency || 'PKR',
+                            ratePerKm: rateDetails.baseRatePerKm,
+                            distanceKm: rateDetails.calculatedDistance,
+                            minimumCharge: rateDetails.minimumCharge,
+                            noOfTrucks: rateDetails.noOfTrucks || 1
+                        },
+                        status: booking.status,
+                        timeline: {
+                            assignedAt: booking.assignedAt?.toISOString(),
+                            startedAt: booking.startedAt?.toISOString(),
+                            completedAt: booking.completedAt?.toISOString(),
+                            duration: durationHours ? `${durationHours} hours` : 'N/A'
                         }
-                    },
-                    tripDetails: {
-                        distance: booking.route?.distance,
-                        startedAt: booking.startedAt,
-                        completedAt: booking.completedAt,
-                        duration: durationHours ? `${durationHours} hours` : 'N/A'
-                    }
-                };
-            })
+                    };
+                })
+            }
         };
 
         res.status(200).json(response);
