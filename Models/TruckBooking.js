@@ -1,23 +1,33 @@
 const mongoose = require("mongoose");
 
 const truckBookingSchema = new mongoose.Schema({
-  userId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "User", 
-    required: true 
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true
   },
-  assignedDriverId: { 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: "User" 
+  assignedDriverId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User"
   },
-  from: { 
-    type: String, 
-    required: true 
+
+  fromAddress: {
+    formattedAddress: { type: String, required: true },
+    coordinates: {
+      lat: { type: Number, required: true },
+      lng: { type: Number, required: true }
+    }
   },
-  to: { 
-    type: String, 
-    required: true 
+
+  toAddress: {
+    formattedAddress: { type: String, required: true },
+    coordinates: {
+      lat: { type: Number, required: true },
+      lng: { type: Number, required: true }
+    }
   },
+
+
   materials: [{
     type: String,
     enum: [
@@ -118,49 +128,50 @@ const truckBookingSchema = new mongoose.Schema({
     ],
     required: true
   }],
-  noOfTrucks: { 
-    type: Number, 
-    required: true 
+  noOfTrucks: {
+    type: Number,
+    required: true
   },
-  scheduledDate: { 
-    type: Date, 
-    required: true 
+  scheduledDate: {
+    type: Date,
+    required: true
   },
   status: {
     type: String,
     enum: ['pending', 'assigned', 'in-progress', 'completed', 'cancelled'],
     default: 'pending'
   },
-  customerName: { 
-    type: String 
+  customerName: {
+    type: String
   },
-  customerPhone: { 
-    type: String 
+  customerPhone: {
+    type: String
   },
-    trackingId: {
-        type: String,
-        unique: true,
-        required: true
-    },
-    truckId: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "TruckRegistration"
-},
+  trackingId: {
+    type: String,
+    unique: true,
+    required: true
+  },
+  truckId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "TruckRegistration"
+  },
   assignedAt: Date,
   startedAt: Date,
   completedAt: Date,
   cancelledAt: Date,
   cancellationReason: String,
-route: {
+  // In TruckBookingModel.js
+  route: {
     start: {
-      address: String,
+      formattedAddress: String,
       coordinates: {
         lat: Number,
         lng: Number
       }
     },
     end: {
-      address: String,
+      formattedAddress: String,
       coordinates: {
         lat: Number,
         lng: Number
@@ -199,13 +210,13 @@ route: {
       default: "PKR"
     }
   },
-  locationUpdateFrequency: { 
-  type: Number, 
-  default: 60 // seconds between updates
-}
+  locationUpdateFrequency: {
+    type: Number,
+    default: 60 // seconds between updates
+  }
 },
 
- { timestamps: true });
+  { timestamps: true });
 
 module.exports = mongoose.model("TruckBooking", truckBookingSchema);
 

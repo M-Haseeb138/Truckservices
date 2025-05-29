@@ -7,19 +7,23 @@ const LocationService = require('../services/locationService');
 const RATE_PER_KM = process.env.RATE_PER_KM || 1.5;
 const RateService = require('../services/rateService');
 
-
 exports.createBooking = async (req, res) => {
   try {
     console.log("Received booking request:", req.body);
 
-    const { from, to, truckTypes, noOfTrucks, weight, materials, scheduledDate } = req.body;
+    const { fromAddress, toAddress, truckTypes, noOfTrucks, weight, materials, scheduledDate } = req.body;
     const userId = req.user?.userId;
 
     // Input validation
-    if (!from || !to || !Array.isArray(truckTypes) || truckTypes.length === 0 || !noOfTrucks || !scheduledDate) {
+    if (
+      !fromAddress?.formattedAddress || !fromAddress?.coordinates?.lat || !fromAddress?.coordinates?.lng ||
+      !toAddress?.formattedAddress || !toAddress?.coordinates?.lat || !toAddress?.coordinates?.lng ||
+      !Array.isArray(truckTypes) || truckTypes.length === 0 ||
+      !noOfTrucks || !scheduledDate
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Missing or invalid required fields: from, to, truckTypes[], noOfTrucks, scheduledDate"
+        message: "Missing or invalid required fields"
       });
     }
 
@@ -29,20 +33,10 @@ exports.createBooking = async (req, res) => {
       return res.status(404).json({ success: false, message: "Customer not found" });
     }
 
-    // Geocode locations
-    const [startLocation, endLocation] = await Promise.all([
-      LocationService.geocodeAddress(from),
-      LocationService.geocodeAddress(to)
-    ]);
-
-    if (!startLocation?.coordinates || !endLocation?.coordinates) {
-      return res.status(400).json({ success: false, message: "Invalid addresses provided" });
-    }
-
-    // Calculate route
+    // Calculate distance & duration
     const { distance, duration } = await LocationService.calculateRoute(
-      startLocation.coordinates,
-      endLocation.coordinates
+      fromAddress.coordinates,
+      toAddress.coordinates
     );
 
     if (!distance || isNaN(distance)) {
@@ -63,8 +57,8 @@ exports.createBooking = async (req, res) => {
     // Create booking
     const booking = new TruckBooking({
       userId,
-      from,
-      to,
+      fromAddress,
+      toAddress,
       truckTypes,
       noOfTrucks,
       weight,
@@ -74,8 +68,8 @@ exports.createBooking = async (req, res) => {
       customerName: customer.fullName,
       customerPhone: customer.phone,
       route: {
-        start: startLocation,
-        end: endLocation,
+        start: fromAddress,
+        end: toAddress,
         distance,
         estimatedDuration: duration
       },
