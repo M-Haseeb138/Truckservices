@@ -30,7 +30,8 @@ exports.getMatchingDriversForBooking = async (req, res) => {
 
         // 1. Get the booking details
         const booking = await TruckBooking.findById(bookingId)
-            .select('truckTypes weight materials route.start');
+            .select('truckTypes weight materials route.start route.start.formattedAddress')
+
 
         if (!booking) {
             console.log(`[MatchingDrivers] Booking not found: ${bookingId}`);
@@ -128,9 +129,11 @@ exports.getMatchingDriversForBooking = async (req, res) => {
                 count: 0,
                 bookingSummary: {
                     pickupLocation: {
-                        address: booking.route.start.address,
+                        address: booking.route?.start?.formattedAddress || 'Address not available',
                         coordinates: bookingCoords
                     },
+
+
                     truckTypes: booking.truckTypes,
                     weight: booking.weight,
                     materials: booking.materials
