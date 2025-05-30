@@ -765,7 +765,7 @@ exports.assignDriverToBooking = async (req, res) => {
 exports.getAllOrders = async (req, res) => {
     try {
         const orders = await TruckBooking.find({
-            status: { $in: ['assigned', 'in-progress', 'completed'] }
+            status: { $in: ['assigned', 'in-progress'] }
         })
             .populate({
                 path: 'userId',
