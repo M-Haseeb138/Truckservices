@@ -5,7 +5,7 @@ const verifyToken = require("../Middlewares/authMiddleware");
 const {authorizeRoles} = require("../Middlewares/roleMiddleware");
 const upload = require("../utils/multerConfig");
 
-// Truck Registration
+
 router.post("/trucks/register", 
     verifyToken, 
     authorizeRoles('driver'), 
@@ -24,7 +24,6 @@ router.put("/assignments/status", verifyToken, authorizeRoles('driver'), driverC
 router.put("/completebooking/:bookingId", verifyToken, authorizeRoles('driver'), driverController.completeBooking);
 router.put("/updateLocation", verifyToken, authorizeRoles('driver'), driverController.updateLocation);
 router.put("/startTrip", verifyToken, authorizeRoles('driver'), driverController.startTrip);
-//////////////
 router.put("/updatedriverlocation", 
     verifyToken, 
     authorizeRoles('driver'), 
@@ -35,7 +34,6 @@ router.get("/nearbydriver",
     authorizeRoles('admin', 'customer'), 
     driverController.getNearbyDrivers
 );
-
 router.get("/getBookingStatusSummary",
     verifyToken,
     authorizeRoles('driver'),

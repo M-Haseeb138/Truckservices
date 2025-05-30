@@ -33,25 +33,18 @@ class RateService {
 
   static async calculateCompleteRate(from, to, truckType, noOfTrucks = 1) {
     try {
-      // Step 1: Geocode addresses
       const [startLocation, endLocation] = await Promise.all([
         LocationService.geocodeAddress(from),
         LocationService.geocodeAddress(to)
       ]);
-
-      // Step 2: Calculate distance
       const { distance, duration, distanceText } = await LocationService.calculateRoute(
         startLocation.coordinates,
         endLocation.coordinates
       );
-
-      // Step 3: Get rate configuration
       const rateConfig = await this.getRateConfig(truckType);
       if (!rateConfig) {
         throw new Error(`No rate configuration found for truck type: ${truckType}`);
       }
-
-      // Step 4: Calculate rates
       let baseRate = distance * rateConfig.baseRatePerKm * noOfTrucks;
       if (baseRate < rateConfig.minimumCharge * noOfTrucks) {
         baseRate = rateConfig.minimumCharge * noOfTrucks;

@@ -16,22 +16,21 @@ const adminSchema = new mongoose.Schema({
     image: { type: String },
     password: { type: String, required: true },
 
-    // 🔥 OTP related fields
+    
     otpCode: { type: String },
     otpExpires: { type: Date },
     otpAttempts: { type: Number, default: 0 },
-    isOtpVerified: { type: Boolean, default: false }, // ✅ Added this field
+    isOtpVerified: { type: Boolean, default: false },
 
 }, { timestamps: true });
 
-// 🔐 Hash password before saving
 adminSchema.pre("save", async function (next) {
     if (!this.isModified("password")) return next();
     this.password = await bcrypt.hash(this.password, 10);
     next();
 });
 
-// 🔐 Compare password
+
 adminSchema.methods.comparePassword = function (enteredPassword) {
     return bcrypt.compare(enteredPassword, this.password);
 };

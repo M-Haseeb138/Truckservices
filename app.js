@@ -4,8 +4,8 @@ const connectDB = require('./config/db');
 const cookieparser = require('cookie-parser');
 const cors = require("cors");
 const WebSocket = require('ws');
-const http = require('http'); // <-- Add this line
-const jwt = require('jsonwebtoken'); // <-- Required for token verification
+const http = require('http');
+const jwt = require('jsonwebtoken'); 
 
 dotenv.config();
 const app = express();
@@ -29,7 +29,6 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cors(corsOptions));
 
-// Routes 
 app.use('/api/auth', require('./routes/userRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/driver', require('./routes/driverRoutes'));
@@ -38,11 +37,8 @@ app.use('/api/adminauth', require('./routes/AdminAuthRoutes'));
 app.use('/api/tracking', require('./routes/trackingRoutes'));
 
 const PORT = process.env.PORT || 3000;
-
-// Create HTTP server from Express app
 const server = http.createServer(app);
 
-// Start HTTP server
 server.listen(PORT, () => {
     console.log(`🚀 Server is running on port ${PORT}`);
 });
@@ -51,15 +47,12 @@ server.listen(PORT, () => {
 const wss = new WebSocket.Server({ server });
 const adminClients = new Set();
 
-// In app.js after WebSocket server setup
 wss.on('connection', (ws) => {
     console.log('New WebSocket connection');
     
     ws.on('message', async (message) => {
         try {
             const data = JSON.parse(message);
-            
-            // Admin subscribes to track a driver
             if (data.type === 'admin-track-driver' && data.token) {
                 try {
                     const decoded = jwt.verify(data.token, process.env.JWT_SECRET);
@@ -72,8 +65,6 @@ wss.on('connection', (ws) => {
                     ws.close();
                 }
             }
-            
-            // Driver updates location
             if (data.type === 'driver-location-update' && data.token) {
                 try {
                     const decoded = jwt.verify(data.token, process.env.JWT_SECRET);
@@ -81,8 +72,6 @@ wss.on('connection', (ws) => {
                     
                     const { lat, lng } = data;
                     const address = await LocationService.reverseGeocode(lat, lng);
-                    
-                    // Update driver's location in database
                     await User.findByIdAndUpdate(decoded.userId, {
                         currentLocation: {
                             coordinates: { lat, lng },
@@ -90,8 +79,6 @@ wss.on('connection', (ws) => {
                             timestamp: new Date()
                         }
                     });
-                    
-                    // Broadcast to admin clients tracking this driver
                     wss.clients.forEach(client => {
                         if (client.readyState === WebSocket.OPEN && client.tracksDriver === decoded.userId) {
                             client.send(JSON.stringify({

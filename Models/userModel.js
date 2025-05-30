@@ -65,7 +65,7 @@ const UserSchema = new mongoose.Schema({
         type: Number,
 
         
-        default: 60 // seconds between updates
+        default: 60 
     }
 }, { timestamps: true });
 

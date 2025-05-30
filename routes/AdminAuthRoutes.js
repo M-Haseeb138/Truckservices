@@ -4,7 +4,6 @@ const upload = require("../utils/multerConfig");
 const AdminAuthController = require("../Controllers/AdminAuthController");
 const verifyAdmin = require("../Middlewares/adminAuthMiddleware")
 
-// Admin auth routes
 router.post("/signup",upload.single("image"), AdminAuthController.signup);
 router.post("/login", AdminAuthController.login);
 router.post("/forgot-password", AdminAuthController.forgotPassword);

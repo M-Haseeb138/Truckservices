@@ -3,7 +3,7 @@ const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 class LocationService {
 
-  // In locationService.js
+
   static async geocodeAddress(address) {
     try {
       const response = await axios.get(
@@ -30,7 +30,6 @@ class LocationService {
       throw error;
     }
   }
-  // Get place autocomplete suggestions
   static async getPlaceSuggestions(input) {
     try {
       const response = await axios.get(
@@ -50,7 +49,6 @@ class LocationService {
       throw error;
     }
   }
-  // Get place details from place ID
   static async getPlaceDetails(placeId) {
     try {
       const response = await axios.get(

@@ -2,8 +2,8 @@
 const TruckBooking = require("../Models/TruckBooking");
 
 const generateTrackingId = () => {
-    const min = 100000; // Smallest 6-digit number
-    const max = 999999; // Largest 6-digit number
+    const min = 100000; 
+    const max = 999999; 
     return Math.floor(min + Math.random() * (max - min + 1)).toString();
 };
 

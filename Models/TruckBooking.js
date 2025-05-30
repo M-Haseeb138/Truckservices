@@ -171,9 +171,9 @@ estimatedDuration: {
   completedAt: Date,
   cancelledAt: Date,
   cancellationReason: String,
-  // In TruckBookingModel.js
+
  route: {
-    distance: Number, // in km
+    distance: Number, 
     estimatedDuration: String
   },
   currentLocation: {
@@ -208,7 +208,7 @@ estimatedDuration: {
   },
   locationUpdateFrequency: {
     type: Number,
-    default: 60 // seconds between updates
+    default: 60 
   }
 },
 

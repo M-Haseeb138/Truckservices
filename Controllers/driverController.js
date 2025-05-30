@@ -3,6 +3,20 @@ const TruckRegistration = require("../Models/truckRegister");
 const TruckBooking = require("../Models/TruckBooking");
 const LocationService = require('../services/locationService');
 const mongoose = require('mongoose');
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1); 
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+    return R * c; // Distance in km
+}
+function deg2rad(deg) {
+    return deg * (Math.PI/180);
+}
 exports.getMyTrucks = async (req, res) => {
     try {
         console.log("Current user ID:", req.user.userId); // ✅ Use userId
@@ -35,7 +49,6 @@ exports.getMyTrucks = async (req, res) => {
     })
 };
 }
-// Get all assigned and in-progress jobs for driver
 exports.getDriverAssignments = async (req, res) => {
     try {
         const assignments = await TruckBooking.find({
@@ -59,7 +72,6 @@ exports.getDriverAssignments = async (req, res) => {
         });
     }
 };
-// Update assignment status (for drivers)
 exports.updateAssignmentStatus = async (req, res) => {
     try {
         const { bookingId, status, notes } = req.body;
@@ -143,149 +155,6 @@ exports.updateAssignmentStatus = async (req, res) => {
         });
     }
 };
-// exports.registerTruck = async (req, res) => {
-//     try {
-//         const user = await User.findById(req.user.userId);
-//         if (!user) {
-//             return res.status(404).json({
-//                 success: false,
-//                 message: "User not found"
-//             });
-//         }
-
-//         // Validate required files
-//         const requiredFiles = [
-//             'idCardFrontImage',
-//             'idCardBackImage',
-//             'licenseFrontImage',
-//             'TruckPicture',
-//             'Truckdocument'
-//         ];
-
-//         const missingFiles = requiredFiles.filter(
-//             file => !req.files?.[file]?.[0]?.path
-//         );
-
-//         if (missingFiles.length > 0) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: `Missing required files: ${missingFiles.join(', ')}`
-//             });
-//         }
-
-//         // Parse driver address
-//         let driverAddress = {};
-//         try {
-//             if (typeof req.body.driverAddress === 'string') {
-//                 driverAddress = JSON.parse(req.body.driverAddress);
-//             } else if (req.body.driverAddress) {
-//                 driverAddress = req.body.driverAddress;
-//             }
-//         } catch (error) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Invalid driver address format"
-//             });
-//         }
-
-//         // Validate mandatory driver fields
-//         const requiredDriverFields = ['driverDateOfBirth', 'driverProvince', 'lisenceNo'];
-//         const missingDriverFields = requiredDriverFields.filter(
-//             field => !req.body[field]
-//         );
-
-//         if (missingDriverFields.length > 0 || !driverAddress.address) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Driver's province, address, date of birth, and license number are required"
-//             });
-//         }
-
-//         // Validate mandatory owner fields
-//         const requiredOwnerFields = ['truckOwnerName', 'ownerMobileNo', 'ownerDateOfBirth', 'ownerProvince', 'ownerAddress'];
-//         const missingOwnerFields = requiredOwnerFields.filter(
-//             field => !req.body[field]
-//         );
-
-//         if (missingOwnerFields.length > 0) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Owner name, mobile, DOB, province, and address are required"
-//             });
-//         }
-
-//         // Construct driver details
-//         const driverDetails = {
-//             truckDriverName: user.fullName,
-//             mobileNo: user.phone,
-//             email: user.email,
-//             CNIC: user.CNIC,
-//             dateOfBirth: req.body.driverDateOfBirth,
-//             province: req.body.driverProvince,
-//             address: {
-//                 formattedAddress: driverAddress.address || '',
-//                 coordinates: driverAddress.coordinates || { lat: null, lng: null }
-//             },
-//             lisenceNo: req.body.lisenceNo || ''
-//         };
-
-//         // Construct owner details
-//         const ownerDetails = {
-//             truckOwnerName: req.body.truckOwnerName,
-//             mobileNo: req.body.ownerMobileNo,
-//             dateOfBirth: req.body.ownerDateOfBirth,
-//             province: req.body.ownerProvince,
-//             address: req.body.ownerAddress
-//         };
-
-//         // Create new truck registration document
-//         const newTruck = new TruckRegistration({
-//             ownerDetails,
-//             driverDetails,
-//             idCardFrontImage: req.files.idCardFrontImage[0].path,
-//             idCardBackImage: req.files.idCardBackImage[0].path,
-//             licenseFrontImage: req.files.licenseFrontImage[0].path,
-//             TruckPicture: req.files.TruckPicture[0].path,
-//             truckDetails: {
-//                 typeOfTruck: req.body.typeOfTruck,
-//                 weight: req.body.weight,
-//                 Registercity: req.body.Registercity,
-//                 VehicleNo: req.body.VehicleNo,
-//                 Truckdocument: req.files.Truckdocument[0].path
-//             },
-//             userId: req.user.userId,
-//             status: 'pending'
-//         });
-
-//         const savedTruck = await newTruck.save();
-
-//         res.status(201).json({
-//             success: true,
-//             message: "Truck registration submitted for approval",
-//             truck: savedTruck
-//         });
-
-//     } catch (error) {
-//         console.error("Truck registration error:", error);
-
-//         if (error.name === 'ValidationError') {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: "Validation failed",
-//                 error: error.message
-//             });
-//         }
-
-//         res.status(500).json({
-//             success: false,
-//             message: "Truck registration failed",
-//             error: error.message
-//         });
-//     }
-// };
-
-// Complete a booking
-
 exports.registerTruck = async (req, res) => {
     try {
         const user = await User.findById(req.user.userId);
@@ -532,7 +401,6 @@ exports.completeBooking = async (req, res) => {
         });
     }
 };
-// Driver starts trip (sets starting point)
 exports.startTrip = async (req, res) => {
   try {
     const { bookingId, lat, lng } = req.body;
@@ -613,64 +481,104 @@ exports.setUpdateFrequency = async (req, res) => {
   }
 };
 exports.updateLocation = async (req, res) => {
-  try {
-    const { bookingId, lat, lng } = req.body;
+    try {
+        const { bookingId, lat, lng } = req.body;
 
-    // Verify booking assignment
-    const booking = await TruckBooking.findOneAndUpdate(
-      {
-        _id: bookingId,
-        assignedDriverId: req.user.userId,
-        status: 'in-progress'
-      },
-      {
-        currentLocation: {
-          coordinates: { lat, lng },
-          address: await LocationService.reverseGeocode(lat, lng),
-          timestamp: new Date()
-        },
-        $push: {
-          locationHistory: {
-            coordinates: { lat, lng },
+        // Validate coordinates
+        if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+            return res.status(400).json({
+                success: false,
+                message: "Valid latitude and longitude are required"
+            });
+        }
+
+        // Verify booking exists and belongs to this driver (check both assigned and in-progress statuses)
+        const booking = await TruckBooking.findOne({
+            _id: bookingId,
+            assignedDriverId: req.user.userId,
+            status: { $in: ['assigned', 'in-progress'] } // Updated to include both statuses
+        });
+
+        if (!booking) {
+            return res.status(404).json({
+                success: false,
+                message: "Booking not found or not assigned to you"
+            });
+        }
+
+        // Get address from coordinates
+        const address = await LocationService.reverseGeocode(lat, lng);
+
+        // Update booking with new location
+        booking.currentLocation = {
+            coordinates: { lat: parseFloat(lat), lng: parseFloat(lng) },
+            address: address,
             timestamp: new Date()
-          }
+        };
+
+        // Add to location history
+        if (!booking.locationHistory) {
+            booking.locationHistory = [];
         }
-      },
-      { new: true }
-    );
+        
+        booking.locationHistory.push({
+            coordinates: { lat: parseFloat(lat), lng: parseFloat(lng) },
+            address: address,
+            timestamp: new Date()
+        });
 
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: "Active booking not found"
-      });
-    }
-
-    // Broadcast to WebSocket clients
-    if (req.app.locals.wss) {
-      req.app.locals.wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN && 
-            client.trackingBookingId === bookingId) {
-          client.send(JSON.stringify({
-            type: 'location-update',
-            location: booking.currentLocation,
-            progress: calculateProgress(booking)
-          }));
+        // If status was 'assigned', automatically transition to 'in-progress'
+        if (booking.status === 'assigned') {
+            booking.status = 'in-progress';
+            booking.startedAt = new Date();
+            
+            // Add status change to history
+            if (!booking.statusHistory) {
+                booking.statusHistory = [];
+            }
+            booking.statusHistory.push({
+                status: 'in-progress',
+                changedAt: new Date(),
+                changedBy: req.user.userId,
+                notes: 'Trip started automatically with first location update'
+            });
         }
-      });
-    }
 
-    res.status(200).json({
-      success: true,
-      message: "Location updated successfully"
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to update location",
-      error: error.message
-    });
-  }
+        await booking.save();
+
+        // Broadcast to WebSocket clients if needed
+        if (req.app.locals.wss) {
+            req.app.locals.wss.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN && 
+                    client.trackingBookingId === bookingId) {
+                    client.send(JSON.stringify({
+                        type: 'location-update',
+                        bookingId: booking._id,
+                        trackingId: booking.trackingId,
+                        location: booking.currentLocation,
+                        driver: {
+                            id: req.user.userId,
+                            name: req.user.fullName
+                        }
+                    }));
+                }
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Location updated successfully",
+            location: booking.currentLocation
+        });
+
+    } catch (error) {
+        console.error("Error updating driver location:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to update location",
+            error: error.message
+        });
+    }
 };
 exports.updateDriverLocation = async (req, res) => {
     try {
@@ -737,7 +645,6 @@ exports.updateDriverLocation = async (req, res) => {
         });
     }
 };
-// Get nearby drivers (for admin/customer use)
 exports.getNearbyDrivers = async (req, res) => {
     try {
         const { lat, lng, radius = 25 } = req.query; // radius in km
@@ -799,23 +706,6 @@ exports.getNearbyDrivers = async (req, res) => {
         });
     }
 };
-// Helper function to calculate distance between two coordinates in km
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Radius of the earth in km
-    const dLat = deg2rad(lat2 - lat1);
-    const dLon = deg2rad(lon2 - lon1); 
-    const a = 
-        Math.sin(dLat/2) * Math.sin(dLat/2) +
-        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-        Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-    return R * c; // Distance in km
-}
-
-function deg2rad(deg) {
-    return deg * (Math.PI/180);
-}
-
 exports.getDriverBookingStatusSummary = async (req, res) => {
     try {
         const driverId = req.user.userId; // Get logged-in driver's ID

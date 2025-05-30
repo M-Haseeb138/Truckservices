@@ -4,7 +4,6 @@ const TruckRegistration = require("../Models/truckRegister");
 const TruckBooking = require("../Models/TruckBooking");
 const mongoose = require('mongoose');
 
-// Helper function to calculate distance between two coordinates in km
 function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; // Radius of the earth in km
     const dLat = deg2rad(lat2 - lat1);
@@ -187,7 +186,6 @@ exports.getMatchingDriversForBooking = async (req, res) => {
         });
     }
 };
-
 exports.approveBooking = async (req, res) => {
     try {
         const { bookingId, truckId } = req.params;
@@ -632,122 +630,6 @@ exports.restoresuspendedDriver = async (req, res) => {
         });
     }
 };
-// exports.assignDriverToBooking = async (req, res) => {
-//     try {
-//         const { bookingId, driverId, truckId } = req.body;
-
-//         // Start transaction
-//         const session = await mongoose.startSession();
-//         session.startTransaction();
-
-//         try {
-//             // 1. Verify the user is actually a driver
-//             const driver = await User.findOne({
-//                 _id: driverId,
-//                 role: 'driver',
-//                 status: 'active'
-//             }).session(session);
-
-//             if (!driver) {
-//                 await session.abortTransaction();
-//                 session.endSession();
-//                 return res.status(400).json({
-//                     success: false,
-//                     message: "The specified user is not a registered driver"
-//                 });
-//             }
-
-//             // 2. Find and validate booking
-//             const booking = await TruckBooking.findById(bookingId)
-//                 .session(session)
-//                 .populate('userId', 'fullName phone');
-
-//             if (!booking) {
-//                 await session.abortTransaction();
-//                 session.endSession();
-//                 return res.status(404).json({
-//                     success: false,
-//                     message: "Booking not found"
-//                 });
-//             }
-
-//             // 3. Find and validate truck belongs to this driver
-//             const truck = await TruckRegistration.findOne({
-//                 _id: truckId,
-//                 userId: driverId,  // Ensure truck belongs to this driver
-//                 status: 'approved'
-//             }).session(session);
-
-//             if (!truck) {
-//                 await session.abortTransaction();
-//                 session.endSession();
-//                 return res.status(400).json({
-//                     success: false,
-//                     message: "Truck not found, not approved, or doesn't belong to this driver"
-//                 });
-//             }
-
-//             // 4. Check if truck is already assigned
-//             const existingAssignment = await TruckBooking.findOne({
-//                 truckId: truckId,
-//                 status: { $in: ['assigned', 'in-progress'] }
-//             }).session(session);
-
-//             if (existingAssignment) {
-//                 await session.abortTransaction();
-//                 session.endSession();
-//                 return res.status(400).json({
-//                     success: false,
-//                     message: "This truck is already assigned to another active booking"
-//                 });
-//             }
-
-//             // 5. Update records
-//             booking.assignedDriverId = driverId;
-//             booking.truckId = truckId;
-//             booking.status = 'assigned';
-//             booking.assignedAt = new Date();
-//             booking.approvedBy = req.admin.adminId;
-
-//             truck.isAvailable = false;
-//             truck.bookingStatus = 'assigned';
-
-//             await Promise.all([
-//                 booking.save({ session }),
-//                 truck.save({ session })
-//             ]);
-
-//             await session.commitTransaction();
-//             session.endSession();
-
-//             // 6. Get fully populated response
-//             const updatedBooking = await TruckBooking.findById(bookingId)
-//                 .populate('userId', 'fullName phone email')
-//                 .populate('assignedDriverId', 'fullName phone')
-//                 .populate('truckId');
-
-//             res.status(200).json({
-//                 success: true,
-//                 message: "Driver and truck assigned successfully",
-//                 booking: updatedBooking
-//             });
-
-//         } catch (error) {
-//             await session.abortTransaction();
-//             session.endSession();
-//             throw error;
-//         }
-
-//     } catch (error) {
-//         console.error("Error assigning driver:", error);
-//         res.status(500).json({
-//             success: false,
-//             message: "Failed to assign driver",
-//             error: error.message
-//         });
-//     }
-// };
-
 exports.assignDriverToBooking = async (req, res) => {
     try {
         const { bookingId, driverId, truckId } = req.body;
@@ -1170,8 +1052,6 @@ exports.getBookingTracking = async (req, res) => {
         });
     }
 };
-
-// Admin gets all active tracking
 exports.getAllActiveTracking = async (req, res) => {
     try {
         const activeBookings = await TruckBooking.find({
@@ -1194,9 +1074,6 @@ exports.getAllActiveTracking = async (req, res) => {
         });
     }
 };
-
-///////////////
-// Get real-time location of a specific truck
 exports.getTruckLocation = async (req, res) => {
     try {
         const { truckId } = req.params;
@@ -1232,8 +1109,6 @@ exports.getTruckLocation = async (req, res) => {
         });
     }
 };
-
-// Get all active trucks with their locations
 exports.getAllActiveTruckLocations = async (req, res) => {
     try {
         const activeBookings = await TruckBooking.find({
@@ -1270,8 +1145,6 @@ exports.getAllActiveTruckLocations = async (req, res) => {
         });
     }
 };
-
-// Get location history for a specific truck
 exports.getTruckLocationHistory = async (req, res) => {
     try {
         const { truckId } = req.params;
